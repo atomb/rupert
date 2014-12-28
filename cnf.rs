@@ -1,22 +1,22 @@
-#[deriving (Show)]
-struct Clause { lits: Vec<int> }
+#[deriving (Show, Clone)]
+pub struct Clause { pub lits: Vec<int> }
+
+#[deriving (Show, Clone)]
+pub struct Formula { pub clauses: Vec<Clause>, pub maxvar: uint }
 
 #[deriving (Show)]
-struct Formula { clauses: Vec<Clause>, maxvar: int }
-
-#[deriving (Show)]
-enum SatResult {
+pub enum SatResult {
     Unsat,
     Sat(Vec<int>)
 }
 
 impl Formula {
-    fn add_clause(&mut self, c: Clause) {
+    pub fn add_clause(&mut self, c: Clause) {
         self.maxvar = std::cmp::max(self.maxvar, max_clause_var(&c));
         self.clauses.push(c);
     }
 
-    fn num_clauses(&self) -> uint { self.clauses.len() }
+    pub fn num_clauses(&self) -> uint { self.clauses.len() }
 }
 
 fn parse_dimacs_clause(l: &str) -> Option<Clause> {
@@ -31,20 +31,22 @@ fn parse_dimacs_clause(l: &str) -> Option<Clause> {
     return Some(Clause { lits : ls })
 }
 
-fn parse_dimacs_formula(s: &str) -> Option<Formula> {
-    let mut ls = s.lines();
+pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
+    let mut ls = s.lines().filter(|s| {
+        !s.starts_with("c") &&
+            !s.starts_with("%") &&
+            !s.starts_with("0") &&
+            !(s.len() == 0)
+    });
     let header = ls.next().unwrap_or("p cnf 0 0");
     let w = header.words().nth(3).unwrap_or("0");
     let ncs = from_str(w).unwrap_or(0);
     let cs = Vec::with_capacity(ncs);
     let mut f = Formula { clauses: cs, maxvar: 0 };
     for l in ls {
-        if l.starts_with("c") {
-        } else {
-            match parse_dimacs_clause(l) {
-                Some(c) => f.add_clause(c),
-                None => return None
-            }
+        match parse_dimacs_clause(l) {
+            Some(c) => f.add_clause(c),
+            None => return None
         }
     };
     return Some(f)
@@ -52,8 +54,8 @@ fn parse_dimacs_formula(s: &str) -> Option<Formula> {
 
 // TODO: make this a method?
 
-fn max_clause_var(c: &Clause) -> int {
-    c.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0)
+fn max_clause_var(c: &Clause) -> uint {
+    c.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as uint
 }
 
 /*
@@ -62,7 +64,7 @@ fn max_formula_var(f: &Formula) -> int {
 }
 */
 
-fn render_dimacs_clause(c: &Clause, s: &mut String) {
+pub fn render_dimacs_clause(c: &Clause, s: &mut String) {
     for l in c.lits.iter() {
         s.push_str(l.to_string().as_slice());
         s.push(' ');
@@ -70,7 +72,7 @@ fn render_dimacs_clause(c: &Clause, s: &mut String) {
     s.push('0');
 }
 
-fn render_dimacs_formula(f: &Formula, s: &mut String) {
+pub fn render_dimacs_formula(f: &Formula, s: &mut String) {
     s.push_str("p cnf ");
     s.push_str(f.maxvar.to_string().as_slice());
     s.push(' ');
@@ -82,32 +84,37 @@ fn render_dimacs_formula(f: &Formula, s: &mut String) {
     }
 }
 
-fn render_sat_result(r: SatResult, s: &mut String) {
+pub fn render_sat_result_new(r: SatResult) -> String {
     match r {
-        Unsat => s.push_str("UNSAT"),
+        Unsat => String::from_str("s UNSATISFIABLE"),
         Sat(ls) => {
-            s.push_str("SAT");
+            let mut s = String::with_capacity(ls.len() * 8);
+            s.push_str("s SATISFIABLE\n");
+            s.push('v');
             for l in ls.iter() {
                 s.push(' ');
                 s.push_str(l.to_string().as_slice());
             }
+            s.push_str(" 0");
+            s
         }
     }
 }
 
-fn render_dimacs_clause_new(c: &Clause) -> String {
+pub fn render_dimacs_clause_new(c: &Clause) -> String {
     let mut s = String::with_capacity(c.lits.len() * 8);
     render_dimacs_clause(c, &mut s);
     return s
 }
 
-fn render_dimacs_formula_new(f: &Formula) -> String {
+pub fn render_dimacs_formula_new(f: &Formula) -> String {
     let maxcl = f.clauses.iter().map(|c| { c.lits.len() }).max().unwrap_or(0);
     let mut s = String::with_capacity(maxcl * f.clauses.len() * 8);
     render_dimacs_formula(f, &mut s);
     return s
 }
 
+/*
 fn main() {
     let mc = parse_dimacs_clause("1 2 -3 0");
     match mc {
@@ -120,3 +127,4 @@ fn main() {
         Some(f) => print!("{}", render_dimacs_formula_new(&f))
     }
 }
+*/
