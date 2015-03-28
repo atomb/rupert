@@ -1,3 +1,6 @@
+use std::num::SignedInt;
+use std::str::FromStr;
+
 #[deriving (Show, Clone)]
 pub struct Clause { pub lits: Vec<int> }
 
@@ -22,7 +25,7 @@ impl Formula {
 fn parse_dimacs_clause(l: &str) -> Option<Clause> {
     let mut ls = Vec::new();
     for w in l.words() {
-        match from_str(w) {
+        match FromStr::from_str(w) {
             Some(0) => (),
             Some(l) => ls.push(l),
             None => return None
@@ -40,7 +43,7 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
     });
     let header = ls.next().unwrap_or("p cnf 0 0");
     let w = header.words().nth(3).unwrap_or("0");
-    let ncs = from_str(w).unwrap_or(0);
+    let ncs = FromStr::from_str(w).unwrap_or(0);
     let cs = Vec::with_capacity(ncs);
     let mut f = Formula { clauses: cs, maxvar: 0 };
     for l in ls {
@@ -86,8 +89,8 @@ pub fn render_dimacs_formula(f: &Formula, s: &mut String) {
 
 pub fn render_sat_result_new(r: SatResult) -> String {
     match r {
-        Unsat => String::from_str("s UNSATISFIABLE"),
-        Sat(ls) => {
+        SatResult::Unsat => String::from_str("s UNSATISFIABLE"),
+        SatResult::Sat(ls) => {
             let mut s = String::with_capacity(ls.len() * 8);
             s.push_str("s SATISFIABLE\n");
             s.push('v');
