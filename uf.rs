@@ -1,18 +1,20 @@
+use std::iter::repeat;
+
 // TODO: Would using SmallIntMap be better than using Vec here?
-struct EquivClass {
-    ranks : Vec<uint>,
-    parents : Vec<uint>
+pub struct EquivClass {
+    ranks : Vec<usize>,
+    parents : Vec<usize>
 }
 
 impl EquivClass {
-    pub fn new(n : uint) -> EquivClass {
+    pub fn new(n : usize) -> EquivClass {
         EquivClass {
-            ranks: Vec::from_elem(n, 0),
-            parents: Vec::from_fn(n, |i| { i })
+            ranks: repeat(0).take(n).collect(),
+            parents: (0..n).map(|i| { i }).collect()
         }
     }
 
-    pub fn union(&mut self, x: uint, y: uint) {
+    pub fn union(&mut self, x: usize, y: usize) {
         let xroot = self.find(x);
         let yroot = self.find(y);
         if xroot == yroot {
@@ -20,8 +22,8 @@ impl EquivClass {
         }
         let xrank = self.ranks[xroot];
         let yrank = self.ranks[yroot];
-        let ps = self.parents.as_mut_slice();
-        let rs = self.ranks.as_mut_slice();
+        let ref mut ps = self.parents;
+        let ref mut rs = self.ranks;
         if xrank < yrank {
             ps[xroot] = yroot;
         } else if xrank > yrank {
@@ -32,15 +34,15 @@ impl EquivClass {
         }
     }
 
-    pub fn find(&mut self, x: uint) -> uint {
+    pub fn find(&mut self, x: usize) -> usize {
         let p = self.parents[x];
         let newp = if p != x { self.find(p) } else { p };
-        self.parents.as_mut_slice()[x] = newp;
+        self.parents[x] = newp;
         newp
     }
-    
-    pub fn find_pure(&self, x: uint) -> uint {
-        self.parents.as_slice()[x]
+
+    pub fn find_pure(&self, x: usize) -> usize {
+        self.parents[x]
     }
 }
 

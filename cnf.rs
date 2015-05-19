@@ -1,16 +1,13 @@
-use std::num::SignedInt;
-use std::str::FromStr;
+#[derive (Debug, Clone)]
+pub struct Clause { pub lits: Vec<isize> }
 
-#[deriving (Show, Clone)]
-pub struct Clause { pub lits: Vec<int> }
+#[derive (Debug, Clone)]
+pub struct Formula { pub clauses: Vec<Clause>, pub maxvar: usize }
 
-#[deriving (Show, Clone)]
-pub struct Formula { pub clauses: Vec<Clause>, pub maxvar: uint }
-
-#[deriving (Show)]
+#[derive (Debug)]
 pub enum SatResult {
     Unsat,
-    Sat(Vec<int>)
+    Sat(Vec<isize>)
 }
 
 impl Formula {
@@ -19,16 +16,16 @@ impl Formula {
         self.clauses.push(c);
     }
 
-    pub fn num_clauses(&self) -> uint { self.clauses.len() }
+    pub fn num_clauses(&self) -> usize { self.clauses.len() }
 }
 
 fn parse_dimacs_clause(l: &str) -> Option<Clause> {
     let mut ls = Vec::new();
-    for w in l.words() {
-        match FromStr::from_str(w) {
-            Some(0) => (),
-            Some(l) => ls.push(l),
-            None => return None
+    for w in l.split(' ') {
+        match w.trim().parse::<isize>() {
+            Ok(0) => (),
+            Ok(l) => ls.push(l),
+            Err(_) => return None
         }
     };
     return Some(Clause { lits : ls })
@@ -42,8 +39,8 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
             !(s.len() == 0)
     });
     let header = ls.next().unwrap_or("p cnf 0 0");
-    let w = header.words().nth(3).unwrap_or("0");
-    let ncs = FromStr::from_str(w).unwrap_or(0);
+    let w = header.split(' ').nth(3).unwrap_or("0");
+    let ncs = w.parse::<usize>().unwrap_or(0);
     let cs = Vec::with_capacity(ncs);
     let mut f = Formula { clauses: cs, maxvar: 0 };
     for l in ls {
@@ -57,19 +54,19 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
 
 // TODO: make this a method?
 
-fn max_clause_var(c: &Clause) -> uint {
-    c.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as uint
+fn max_clause_var(c: &Clause) -> usize {
+    c.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as usize
 }
 
 /*
-fn max_formula_var(f: &Formula) -> int {
+fn max_formula_var(f: &Formula) -> isize {
     f.clauses.iter().map(max_clause_var).max().unwrap_or(0)
 }
 */
 
 pub fn render_dimacs_clause(c: &Clause, s: &mut String) {
     for l in c.lits.iter() {
-        s.push_str(l.to_string().as_slice());
+        s.push_str(l.to_string().as_ref());
         s.push(' ');
     }
     s.push('0');
@@ -77,9 +74,9 @@ pub fn render_dimacs_clause(c: &Clause, s: &mut String) {
 
 pub fn render_dimacs_formula(f: &Formula, s: &mut String) {
     s.push_str("p cnf ");
-    s.push_str(f.maxvar.to_string().as_slice());
+    s.push_str(f.maxvar.to_string().as_ref());
     s.push(' ');
-    s.push_str(f.clauses.len().to_string().as_slice());
+    s.push_str(f.clauses.len().to_string().as_ref());
     s.push('\n');
     for c in f.clauses.iter() {
         render_dimacs_clause(c, s);
@@ -89,14 +86,14 @@ pub fn render_dimacs_formula(f: &Formula, s: &mut String) {
 
 pub fn render_sat_result_new(r: SatResult) -> String {
     match r {
-        SatResult::Unsat => String::from_str("s UNSATISFIABLE"),
+        SatResult::Unsat => "s UNSATISFIABLE".to_string(),
         SatResult::Sat(ls) => {
             let mut s = String::with_capacity(ls.len() * 8);
             s.push_str("s SATISFIABLE\n");
             s.push('v');
             for l in ls.iter() {
                 s.push(' ');
-                s.push_str(l.to_string().as_slice());
+                s.push_str(l.to_string().as_ref());
             }
             s.push_str(" 0");
             s
