@@ -46,7 +46,8 @@ impl EquivClass {
     }
 }
 
-fn main() {
+#[test]
+fn test1() {
     let mut ec = EquivClass::new(10);
     ec.union(1,2);
     ec.union(2,3);
