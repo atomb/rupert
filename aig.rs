@@ -7,8 +7,8 @@ use std::io::Read;
 use std::io::Write;
 use std::result::Result;
 
-use AIGType::*;
 pub enum AIGType { ASCII, Binary }
+use aig::AIGType::*;
 
 pub type Var = u64;
 pub type Lit = u64;
