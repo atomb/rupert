@@ -1,4 +1,18 @@
 [package]
 name = "rust-prover"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Aaron Tomb <aarontomb@gmail.com>"]
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = false
+debug-assertions = false
