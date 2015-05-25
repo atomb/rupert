@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 //use std::collections::HashMap;
+use std::error::Error;
 use std::io;
 use std::io::BufRead;
 use std::io::Read;
@@ -30,11 +31,7 @@ pub struct Header {
 pub struct AIGER {
     header: Header,
     body: AIG,
-    /*
-    inames: Vec<String>,
-    lnames: Vec<String>,
-    onames: Vec<String>,
-    */
+    symbols: Vec<String>,
     comments: Vec<String>
 }
 
@@ -110,8 +107,8 @@ fn pop_delta<R: Read>(r: &mut R) -> ParseResult<u32> {
                 x = x | ((ch & 0x07f) << (7 * i)) as u32;
                 i = i + 1;
             },
-            // TODO: make the following more informative?
-            Some(Err(_)) => return Err("I/O error.".to_string()),
+            Some(Err(e)) => return Err("I/O error: ".to_string() +
+                                       e.description()),
             None => return Err("Binary AND ended prematurely.".to_string())
         }
     }
@@ -142,16 +139,19 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     let no = try!(parse_lit(nos));
     let nas = try!(ws.next().ok_or("Missing gate count in header".to_string()));
     let na = try!(parse_lit(nas));
-    // TODO: check that words is empty
-    let h = Header {
-        aigtype: ty,
-        maxvar: mv,
-        ninputs: ni,
-        nlatches: nl,
-        noutputs: no,
-        nands: na
-    };
-    return Ok(h)
+    if ws.next().is_none() {
+        let h = Header {
+            aigtype: ty,
+            maxvar: mv,
+            ninputs: ni,
+            nlatches: nl,
+            noutputs: no,
+            nands: na
+        };
+        return Ok(h)
+    } else {
+        return Err("Stray words on header line".to_string());
+    }
 }
 
 fn parse_io(s: &str) -> ParseResult<u64> {
@@ -164,8 +164,11 @@ fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
     let i = try!(parse_lit(is));
     let ns = try!(ws.next().ok_or("Missing latch next".to_string()));
     let n = try!(parse_lit(ns));
-    // TODO: check that ws is empty
-    return Ok((i, n))
+    if ws.next().is_none() {
+        return Ok((i, n))
+    } else {
+        return Err("Stray words on ASCII latch line".to_string());
+    }
 }
 
 fn parse_and_ascii(l: &str) -> ParseResult<And> {
@@ -176,16 +179,22 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
     let l = try!(parse_lit(ls));
     let rs = try!(ws.next().ok_or("Missing AND right".to_string()));
     let r = try!(parse_lit(rs));
-    // TODO: check that ws is empty
-    return Ok((n, (l, r)))
+    if ws.next().is_none() {
+        return Ok((n, (l, r)))
+    } else {
+        return Err("Stray words on ASCII and line".to_string());
+    }
 }
 
 fn parse_latch_binary(l: &str, i: u64) -> ParseResult<Latch> {
     let ref mut ws = l.split(' ');
     let ns = try!(ws.next().ok_or("Missing latch next".to_string()));
     let n = try!(parse_lit(ns));
-    // TODO: check that ws is empty
-    return Ok((i, n))
+    if ws.next().is_none() {
+        return Ok((i, n))
+    } else {
+        return Err("Stray words on binary latch line".to_string());
+    }
 }
 
 fn parse_cand_binary<R: Read>(r: &mut R) -> ParseResult<CompactAnd> {
@@ -203,12 +212,12 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
     let mut l : String = String::new();
     match r.read_line(&mut l) {
         Ok(_) => Ok(l),
-        // TODO: make the following more informative?
-        Err(_) => Err("I/O error reading line".to_string())
+        Err(e) => Err("I/O error reading line: ".to_string() +
+                      e.description())
     }
 }
 
-fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
+pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
     let mut is = Vec::with_capacity(h.ninputs as usize);
@@ -232,8 +241,10 @@ fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
         let l =
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
-                Binary =>
-                    try!(parse_latch_binary(s.as_ref(), var_to_lit(n + ic + 1)))
+                Binary => {
+                    let l0 = var_to_lit(n + ic + 1);
+                    try!(parse_latch_binary(s.as_ref(), l0))
+                }
             };
         ls.push(l);
     }
@@ -256,9 +267,26 @@ fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
             }
         }
     };
-    // TODO: parse symbol table
-    // TODO: parse comments
-    // TODO: check that words is empty
+    let mut in_comments = false;
+    let mut syms = Vec::new();
+    let mut cmnts = Vec::new();
+    while let Ok(s) = read_aiger_line(r) {
+        if in_comments {
+            cmnts.push(s);
+        } else {
+            match s.chars().nth(0) {
+                Some('i') => syms.push(s),
+                Some('l') => syms.push(s),
+                Some('o') => syms.push(s),
+                Some('c') => in_comments = true,
+                Some(_) =>
+                    return Err("Invalid symbol table character".to_string()),
+                None =>
+                    return Err("Empty symbol table line".to_string()),
+            }
+        }
+    }
+    // TODO: check that r is empty
     let aig =
         AIG {
             inputs: is,
@@ -270,7 +298,8 @@ fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
         AIGER {
             header: h,
             body: aig,
-            comments: vec![]
+            symbols: syms,
+            comments: cmnts
         };
     Ok(aiger)
 }
@@ -322,7 +351,7 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
     push_delta(rd, w)
 }
 
-fn write_aiger<W: Write>(g: AIGER, w: &mut W) -> io::Result<()> {
+pub fn write_aiger<W: Write>(g: AIGER, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
     let b = g.body;
     match g.header.aigtype {
@@ -332,14 +361,17 @@ fn write_aiger<W: Write>(g: AIGER, w: &mut W) -> io::Result<()> {
     match g.header.aigtype {
         ASCII  => for l in b.latches { try!(write_latch_ascii(l, w)); },
         Binary => for l in b.latches { try!(write_latch_binary(l, w)); }
-    };
+    }
     for o in b.outputs {
         try!(write_io(o, w));
     }
     match g.header.aigtype {
         ASCII  => for l in b.ands { try!(write_and_ascii(l, w)); },
         Binary => for l in b.ands { try!(write_and_binary(l, w)); }
-    };
+    }
+    for s in g.symbols      { try!(writeln!(w, "{}", s)) }
+    if g.comments.len() > 0 { try!(writeln!(w, "c"))     }
+    for s in g.comments     { try!(writeln!(w, "{}", s)) }
     return Ok(())
 }
 
@@ -374,11 +406,11 @@ pub fn eval_aig(aig: AIG, ins: &Vec<u64>) -> Vec<u64> {
     return outs
 }
 
-pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R, w: &mut W) -> ParseResult<()> {
+pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
+                                        w: &mut W) -> ParseResult<()> {
     let aiger = try!(parse_aiger(r));
     match write_aiger(aiger, w) {
         Ok(()) => Ok(()),
-        // TODO: make the following more informative?
-        Err(_) => Err("I/O error.".to_string())
+        Err(e) => Err("I/O error: ".to_string() + e.description())
     }
 }
