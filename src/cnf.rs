@@ -1,3 +1,5 @@
+use std::cmp;
+
 #[derive (Debug, Clone)]
 pub struct Clause { pub lits: Vec<isize> }
 
@@ -12,7 +14,7 @@ pub enum SatResult {
 
 impl Formula {
     pub fn add_clause(&mut self, c: Clause) {
-        self.maxvar = std::cmp::max(self.maxvar, max_clause_var(&c));
+        self.maxvar = cmp::max(self.maxvar, max_clause_var(&c));
         self.clauses.push(c);
     }
 

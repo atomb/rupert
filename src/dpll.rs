@@ -1,14 +1,10 @@
-#![feature(slice_patterns)]
-#![feature(convert)]
-#![feature(collections)]
-#![feature(exit_status)]
-
-extern crate cnf;
+use cnf;
 use cnf::Clause;
 use cnf::Formula;
 use cnf::SatResult;
 use cnf::SatResult::*;
 use std::iter::repeat;
+use std::io;
 use std::io::Read;
 
 /*
@@ -19,14 +15,22 @@ struct Solver {
 }
 */
 
+fn find_lit(c: &Clause, l: isize) -> Option<usize> {
+    for i in 0..c.lits.len() {
+        if c.lits[i] == l { return Some(i) }
+    }
+    return None
+}
+
 fn is_empty_clause(c: &Clause) -> bool {
     c.lits.len() == 0
 }
 
 fn is_unit_clause(c: &Clause) -> Option<isize> {
-    match c.lits.as_slice() {
-        [l] => Some(l),
-        _ => None
+    if c.lits.len() != 1 {
+        None
+    } else {
+        Some(c.lits[0])
     }
 }
 
@@ -75,7 +79,7 @@ fn assign(f: &mut Formula, l: isize) {
             *c = mk_unit_clause(l);
         } else {
             let lneg = -l;
-            match c.lits.as_slice().position_elem(&lneg) {
+            match find_lit(&c, lneg) {
                 Some(i) => { c.lits.swap_remove(i); }
                 None => ()
             }
@@ -99,7 +103,7 @@ fn choose_literal(f: &Formula) -> isize {
     return lit
 }
 
-fn dpll(f: &mut Formula) -> SatResult {
+pub fn dpll(f: &mut Formula) -> SatResult {
     if f.clauses.iter().any(is_empty_clause) { return Unsat };
     match is_all_units(f) {
         Some(ls) => Sat(ls),
@@ -118,39 +122,16 @@ fn dpll(f: &mut Formula) -> SatResult {
     }
 }
 
-fn read_file(file: &String, buf: &mut Vec<u8>) -> std::io::Result<usize> {
-    let path = &std::path::Path::new(file);
-    let mut fh = std::fs::File::open(path).ok().unwrap();
+pub fn read_file(file: &String, buf: &mut Vec<u8>) -> io::Result<usize> {
+    use std::path;
+    use std::fs;
+    let path = &path::Path::new(file);
+    let mut fh = fs::File::open(path).ok().unwrap();
     fh.read_to_end(buf)
 }
 
-fn do_dpll(f: Formula) {
+pub fn do_dpll(f: Formula) {
     let mut f0 = f;
     let r = cnf::render_sat_result_new(dpll(&mut f0));
     println!("{}", r);
-}
-
-fn main() {
-    let vargs : Vec<String> = std::env::args().collect();
-    let ref sargs : [String] = vargs[..];
-    match sargs {
-        [_, ref name] => {
-            let mut contents : Vec<u8> = Vec::new();
-            match read_file(name, &mut contents) {
-                Err(e) => println!("Error reading file: {}", e),
-                Ok(_) => {
-                    let s = std::str::from_utf8(contents.as_ref()).ok().unwrap();
-                    match cnf::parse_dimacs_formula(s) {
-                        None => println!("Failed to parse formula."),
-                        Some(f) => do_dpll(f)
-                    }
-                }
-            }
-        },
-        _ => {
-            println!("Usage: dpll <filename(s)>");
-            std::env::set_exit_status(1);
-            return
-        }
-    }
 }
