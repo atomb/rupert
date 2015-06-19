@@ -7,7 +7,7 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::path::Path;
 
-fn main() {
+pub fn main() {
     let vargs : Vec<String> = std::env::args().collect();
     if vargs.len() != 3 {
         println!("Usage: tests <infile> <outfile>");

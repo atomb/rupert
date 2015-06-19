@@ -7,7 +7,7 @@ use rust_prover::dpll;
 use std::env;
 use std::str;
 
-fn main() {
+pub fn main() {
     let vargs : Vec<String> = env::args().collect();
     if vargs.len() != 2 {
         println!("Usage: dpll <filename(s)>");
