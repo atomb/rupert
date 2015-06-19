@@ -101,10 +101,8 @@ fn pop_delta<R: Read>(r: &mut R) -> ParseResult<u32> {
     loop {
         match r.bytes().next() {
             Some(Ok(ch)) => {
-                if ch & 0x80 == 0 {
-                    return Ok (x | (ch << (7 * i)) as u32);
-                }
-                x = x | ((ch & 0x07f) << (7 * i)) as u32;
+                x = x | (((ch & 0x7f) as u32) << (7 * i));
+                if ch & 0x80 == 0 { return Ok (x) }
                 i = i + 1;
             },
             Some(Err(e)) => return Err("I/O error: ".to_string() +
