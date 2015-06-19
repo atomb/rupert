@@ -271,22 +271,27 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
     let mut syms = Vec::new();
     let mut cmnts = Vec::new();
     while let Ok(s) = read_aiger_line(r) {
-        if in_comments {
-            cmnts.push(s);
+        if s.is_empty() {
+            break
+        } else if in_comments {
+            cmnts.push(s.trim_right().to_string());
         } else {
             match s.chars().nth(0) {
-                Some('i') => syms.push(s),
-                Some('l') => syms.push(s),
-                Some('o') => syms.push(s),
+                Some('i') => syms.push(s.trim_right().to_string()),
+                Some('l') => syms.push(s.trim_right().to_string()),
+                Some('o') => syms.push(s.trim_right().to_string()),
                 Some('c') => in_comments = true,
                 Some(_) =>
                     return Err("Invalid symbol table character".to_string()),
                 None =>
+                    // Should never happen
                     return Err("Empty symbol table line".to_string()),
             }
         }
     }
-    // TODO: check that r is empty
+    if r.bytes().count() != 0 {
+        return Err("Parsing did not consume all bytes".to_string());
+    }
     let aig =
         AIG {
             inputs: is,
