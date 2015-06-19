@@ -417,3 +417,38 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
         Err(e) => Err("I/O error: ".to_string() + e.description())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::push_delta;
+    use super::pop_delta;
+
+    fn prop_push_pop(delta: u32) -> bool {
+        let mut b : Vec<u8> = Vec::new();
+        match push_delta(delta, &mut b) {
+            Ok(_) => {
+                let mut b2 = &b[..];
+                match pop_delta(&mut b2) {
+                    Ok(rdelta) => delta == rdelta,
+                    Err(_) => false,
+                }
+            },
+            Err(_) => false,
+        }
+    }
+
+    #[test]
+    fn do_push_pop() {
+        assert!(prop_push_pop(0));
+        assert!(prop_push_pop(1));
+        assert!(prop_push_pop(34));
+        assert!(prop_push_pop(0x7f));
+        assert!(prop_push_pop(0x80));
+        assert!(prop_push_pop(0xff));
+        assert!(prop_push_pop(0x100));
+        assert!(prop_push_pop(0xffff));
+        assert!(prop_push_pop(0x10000));
+        assert!(prop_push_pop(0xfffffffe));
+        assert!(prop_push_pop(0xffffffff));
+    }
+}
