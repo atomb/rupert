@@ -119,6 +119,12 @@ fn parse_lit(s: &str) -> ParseResult<Lit> {
     }
 }
 
+fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
+    let s = try!(os.ok_or(msg.to_string()));
+    let l = try!(parse_lit(s));
+    return Ok(l)
+}
+
 fn parse_header(l: &str) -> ParseResult<Header> {
     let ref mut ws = l.split(' ');
     let ty = match ws.next() {
@@ -127,17 +133,13 @@ fn parse_header(l: &str) -> ParseResult<Header> {
         Some(fmt) => return Err("Invalid format identifier: ".to_string() + fmt),
         None => return Err("Missing format identifier.".to_string())
     };
-    let mvs = try!(ws.next().ok_or("Missing maxvar in header".to_string()));
-    let mv = try!(parse_lit(mvs));
-    let nis = try!(ws.next().ok_or("Missing input count in header".to_string()));
-    let ni = try!(parse_lit(nis));
-    let nls = try!(ws.next().ok_or("Missing latch count in header".to_string()));
-    let nl = try!(parse_lit(nls));
-    let nos = try!(ws.next().ok_or("Missing output count in header".to_string()));
-    let no = try!(parse_lit(nos));
-    let nas = try!(ws.next().ok_or("Missing gate count in header".to_string()));
-    let na = try!(parse_lit(nas));
-    if ws.next().is_none() {
+    let mv = try!(parse_lit_error(ws.next(), "Missing maxvar in header"));
+    let ni = try!(parse_lit_error(ws.next(), "Missing input count in header"));
+    let nl = try!(parse_lit_error(ws.next(), "Missing latch count in header"));
+    let no = try!(parse_lit_error(ws.next(), "Missing output count in header"));
+    let na = try!(parse_lit_error(ws.next(), "Missing gate count in header"));
+    // Allow stray words: used for AIGER extensions
+    //if ws.next().is_none() {
         let h = Header {
             aigtype: ty,
             maxvar: mv,
@@ -147,9 +149,9 @@ fn parse_header(l: &str) -> ParseResult<Header> {
             nands: na
         };
         return Ok(h)
-    } else {
-        return Err("Stray words on header line".to_string());
-    }
+    //} else {
+    //    return Err("Stray words on header line".to_string());
+    //}
 }
 
 fn parse_io(s: &str) -> ParseResult<u64> {
@@ -158,10 +160,8 @@ fn parse_io(s: &str) -> ParseResult<u64> {
 
 fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
     let ref mut ws = l.split(' ');
-    let is = try!(ws.next().ok_or("Missing latch ID".to_string()));
-    let i = try!(parse_lit(is));
-    let ns = try!(ws.next().ok_or("Missing latch next".to_string()));
-    let n = try!(parse_lit(ns));
+    let i = try!(parse_lit_error(ws.next(), "Missing latch ID"));
+    let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
         return Ok((i, n))
     } else {
@@ -171,12 +171,9 @@ fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
 
 fn parse_and_ascii(l: &str) -> ParseResult<And> {
     let ref mut ws = l.split(' ');
-    let ns = try!(ws.next().ok_or("Missing AND ID".to_string()));
-    let n = try!(parse_lit(ns));
-    let ls = try!(ws.next().ok_or("Missing AND left".to_string()));
-    let l = try!(parse_lit(ls));
-    let rs = try!(ws.next().ok_or("Missing AND right".to_string()));
-    let r = try!(parse_lit(rs));
+    let n = try!(parse_lit_error(ws.next(), "Missing AND ID"));
+    let l = try!(parse_lit_error(ws.next(), "Missing AND left"));
+    let r = try!(parse_lit_error(ws.next(), "Missing AND right"));
     if ws.next().is_none() {
         return Ok((n, (l, r)))
     } else {
@@ -186,8 +183,7 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
 
 fn parse_latch_binary(l: &str, i: u64) -> ParseResult<Latch> {
     let ref mut ws = l.split(' ');
-    let ns = try!(ws.next().ok_or("Missing latch next".to_string()));
-    let n = try!(parse_lit(ns));
+    let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
         return Ok((i, n))
     } else {
