@@ -69,8 +69,8 @@ pub trait AIG {
     /*
     fn get_and(&self, l: PosLit) -> (Lit, Lit);
     fn get_next(&self, l: PosLit) -> Lit;
-    fn get_outputs(&self) -> Vec<Lit>;
     */
+    fn outputs(&self) -> &Vec<Lit>;
     fn num_inputs(&self) -> usize;
     fn num_latches(&self) -> usize;
     fn num_outputs(&self) -> usize;
@@ -97,6 +97,7 @@ impl AIG for MapAIG {
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxlit(&self)      -> PosLit { self.maxlit }
+    fn outputs(&self)     -> &Vec<Lit> { &self.outputs }
 }
 
 pub type ParseResult<T> = Result<T, String>;
@@ -428,28 +429,25 @@ pub fn eval_lit<T: Clone + Not<Output=T>>(vals: &Vec<T>, l: Lit) -> T {
 }
 
 // This can become more polymorphic once Zero is stable
-pub fn eval_aig(aig: MapAIG, ins: &Vec<u64>) -> Vec<u64> {
-    let ni = aig.inputs.len();
+pub fn eval_aig(aig: &MapAIG, ins: &Vec<u64>) -> Vec<u64> {
+    let ni = aig.num_inputs();
     assert!(ni == ins.len());
-    let nl = aig.latches.len();
-    let no = aig.outputs.len();
-    let na = aig.ands.len();
-    let nvars = ni + nl + na;
-    let mut vals = Vec::with_capacity(nvars);
-    for i in 0..ni {
-        vals.push(ins[i]);
-    }
-    for _i in 0..nl {
-        vals.push(0);
-    }
-    for (l, (r0, r1)) in aig.ands {
+    let nl = aig.num_latches();
+    let no = aig.num_outputs();
+    let na = aig.num_ands();
+    let mut vals = Vec::with_capacity(ni + nl + na);
+    for  v in ins   { vals.push(*v); }
+    for _i in 0..nl { vals.push(0); }
+    for a in &aig.ands {
+        let (l, r) = a;
+        let (r0, r1) = *r;
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
-        vals[lit_to_var(l) as usize] = r0v & r1v;
+        vals[lit_to_var(*l) as usize] = r0v & r1v;
     }
     let mut outs = Vec::with_capacity(no);
-    for i in 0..no {
-        outs.push(eval_lit(&vals, aig.outputs[i as usize]));
+    for l in aig.outputs() {
+        outs.push(eval_lit(&vals, *l));
     }
     return outs
 }
