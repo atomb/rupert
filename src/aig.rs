@@ -418,6 +418,9 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
 mod tests {
     use super::push_delta;
     use super::pop_delta;
+    use super::compact_and;
+    use super::expand_and;
+    use super::And;
 
     fn prop_push_pop(delta: u32) -> bool {
         let mut b : Vec<u8> = Vec::new();
@@ -433,6 +436,12 @@ mod tests {
         }
     }
 
+    fn prop_expand_compact(a: And) -> bool {
+        let (n, (_, _)) = a;
+        let a2 = expand_and(compact_and(a), n);
+        a == a2
+    }
+
     #[test]
     fn do_push_pop() {
         assert!(prop_push_pop(0));
@@ -446,5 +455,11 @@ mod tests {
         assert!(prop_push_pop(0x10000));
         assert!(prop_push_pop(0xfffffffe));
         assert!(prop_push_pop(0xffffffff));
+    }
+
+    #[test]
+    fn do_expand_compact() {
+        assert!(prop_expand_compact((2, (1, 0))));
+        assert!(prop_expand_compact((4096, (1024, 1023))));
     }
 }
