@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::BTreeMap;
 //use std::collections::HashMap;
 use std::error::Error;
@@ -5,6 +6,7 @@ use std::io;
 use std::io::BufRead;
 use std::io::Read;
 use std::io::Write;
+use std::ops::Not;
 use std::result::Result;
 
 pub enum AIGType { ASCII, Binary }
@@ -28,18 +30,19 @@ pub struct Header {
     nands: u64
 }
 
-pub struct AIGER {
+pub struct AIGER<T: AIG> {
     header: Header,
-    body: AIG,
+    body: T,
     symbols: Vec<String>,
     comments: Vec<String>
 }
 
-pub struct AIG {
+pub struct MapAIG {
     inputs: Vec<PosLit>,
     latches: Vec<(PosLit, Lit)>,
     outputs: Vec<Lit>,
-    ands: BTreeMap<PosLit, (Lit, Lit)>
+    ands: BTreeMap<PosLit, (Lit, Lit)>,
+    maxlit: PosLit
 }
 
 /*
@@ -54,7 +57,47 @@ pub struct HashedAIG<T> {
     aig: T,
     hash: HashMap<(Lit, Lit), Var>
 }
+
+type CompactHashedAIG = HashedAIG<CompactAIG>;
+type CompactHashedAIGER = AIGER<HashedAIG<CompactAIG>>;
 */
+
+pub trait AIG {
+    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
+    fn add_output(&mut self, o: Lit);
+    fn set_next(&mut self, l: PosLit, n: Lit);
+    /*
+    fn get_and(&self, l: PosLit) -> (Lit, Lit);
+    fn get_next(&self, l: PosLit) -> Lit;
+    fn get_outputs(&self) -> Vec<Lit>;
+    */
+    fn num_inputs(&self) -> usize;
+    fn num_latches(&self) -> usize;
+    fn num_outputs(&self) -> usize;
+    fn num_ands(&self) -> usize;
+    fn maxlit(&self) -> PosLit;
+    //fn eval(&self, ...) -> ...;
+}
+
+impl AIG for MapAIG {
+    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+        let n = self.maxlit + 2;
+        self.ands.insert(n, (l, r));
+        self.maxlit = n;
+        n
+    }
+    fn add_output(&mut self, o: Lit) {
+        self.outputs.push(o);
+    }
+    fn set_next(&mut self, l: PosLit, n: Lit) {
+        self.latches.push((l, n));
+    }
+    fn num_inputs(&self)  -> usize  { self.inputs.len() }
+    fn num_latches(&self) -> usize  { self.latches.len() }
+    fn num_outputs(&self) -> usize  { self.outputs.len() }
+    fn num_ands(&self)    -> usize  { self.ands.len() }
+    fn maxlit(&self)      -> PosLit { self.maxlit }
+}
 
 pub type ParseResult<T> = Result<T, String>;
 
@@ -211,7 +254,7 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
     }
 }
 
-pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
+pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
     let mut is = Vec::with_capacity(h.ninputs as usize);
@@ -247,17 +290,20 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
         let i = try!(parse_io(s.as_ref()));
         os.push(i);
     }
+    let mut maxlit = 0;
     match h.aigtype {
         ASCII => for _n in 0 .. ac {
             let s = try!(read_aiger_line(r));
             let (nid, a) = try!(parse_and_ascii(s.as_ref()));
             gs.insert(nid, a);
+            maxlit = cmp::max(maxlit, nid);
         },
         Binary => {
             for n in 0 .. ac {
                 let lit = var_to_lit(n + ic + lc + 1);
                 let (lit2, a) = try!(parse_and_binary(lit, r));
                 gs.insert(lit2, a);
+                maxlit = cmp::max(maxlit, lit2);
             }
         }
     };
@@ -287,11 +333,12 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER> {
         return Err("Parsing did not consume all bytes".to_string());
     }
     let aig =
-        AIG {
+        MapAIG {
             inputs: is,
             outputs: os,
             latches: ls,
-            ands: gs
+            ands: gs,
+            maxlit: maxlit
         };
     let aiger =
         AIGER {
@@ -350,7 +397,7 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
     push_delta(rd, w)
 }
 
-pub fn write_aiger<W: Write>(g: AIGER, w: &mut W) -> io::Result<()> {
+pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
     let b = g.body;
     match g.header.aigtype {
@@ -374,14 +421,16 @@ pub fn write_aiger<W: Write>(g: AIGER, w: &mut W) -> io::Result<()> {
     return Ok(())
 }
 
-pub fn eval_lit(vals: &Vec<u64>, l: Lit) -> u64 {
-    let val = vals[lit_to_var(l) as usize];
+// NB: this is only reasonable for types for which clone() is a no-op
+pub fn eval_lit<T: Clone + Not<Output=T>>(vals: &Vec<T>, l: Lit) -> T {
+    let val = vals[lit_to_var(l) as usize].clone();
     if lit_sign(l) { !val } else { val }
 }
 
-pub fn eval_aig(aig: AIG, ins: &Vec<u64>) -> Vec<u64> {
+// This can become more polymorphic once Zero is stable
+pub fn eval_aig(aig: MapAIG, ins: &Vec<u64>) -> Vec<u64> {
     let ni = aig.inputs.len();
-    // TODO: assert ni == ins.len()
+    assert!(ni == ins.len());
     let nl = aig.latches.len();
     let no = aig.outputs.len();
     let na = aig.ands.len();
