@@ -174,7 +174,8 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     let ty = match ws.next() {
         Some("aig") => Binary,
         Some("aag") => ASCII,
-        Some(fmt) => return Err("Invalid format identifier: ".to_string() + fmt),
+        Some(fmt) => return Err("Invalid format identifier: ".to_string() +
+                                fmt),
         None => return Err("Missing format identifier.".to_string())
     };
     let mv = try!(parse_lit_error(ws.next(), "Missing maxvar in header"));
@@ -438,9 +439,7 @@ pub fn eval_aig(aig: &MapAIG, ins: &Vec<u64>) -> Vec<u64> {
     let mut vals = Vec::with_capacity(ni + nl + na);
     for  v in ins   { vals.push(*v); }
     for _i in 0..nl { vals.push(0); }
-    for a in &aig.ands {
-        let (l, r) = a;
-        let (r0, r1) = *r;
+    for (l, &(r0, r1)) in &aig.ands {
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
         vals[lit_to_var(*l) as usize] = r0v & r1v;
@@ -484,9 +483,7 @@ mod tests {
     }
 
     fn prop_expand_compact(a: And) -> bool {
-        let (n, (_, _)) = a;
-        let a2 = expand_and(compact_and(a), n);
-        a == a2
+        a == expand_and(compact_and(a), a.0)
     }
 
     #[test]

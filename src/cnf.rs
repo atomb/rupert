@@ -1,4 +1,6 @@
 use std::cmp;
+use std::io;
+use std::io::Write;
 
 #[derive (Debug, Clone)]
 pub struct Clause { pub lits: Vec<isize> }
@@ -12,13 +14,23 @@ pub enum SatResult {
     Sat(Vec<isize>)
 }
 
+impl Clause {
+    pub fn max_var(&self) -> usize {
+        self.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as usize
+    }
+}
+
 impl Formula {
     pub fn add_clause(&mut self, c: Clause) {
-        self.maxvar = cmp::max(self.maxvar, max_clause_var(&c));
+        self.maxvar = cmp::max(self.maxvar, c.max_var());
         self.clauses.push(c);
     }
 
     pub fn num_clauses(&self) -> usize { self.clauses.len() }
+
+    pub fn max_var(&self) -> usize {
+        self.clauses.iter().map(|c| { c.max_var() }).max().unwrap_or(0)
+    }
 }
 
 fn parse_dimacs_clause(l: &str) -> Option<Clause> {
@@ -54,79 +66,64 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
     return Some(f)
 }
 
-// TODO: make this a method?
 
-fn max_clause_var(c: &Clause) -> usize {
-    c.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as usize
-}
-
-/*
-fn max_formula_var(f: &Formula) -> isize {
-    f.clauses.iter().map(max_clause_var).max().unwrap_or(0)
-}
-*/
-
-pub fn render_dimacs_clause(c: &Clause, s: &mut String) {
+pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W) -> io::Result<()> {
     for l in c.lits.iter() {
-        s.push_str(l.to_string().as_ref());
-        s.push(' ');
+        try!(write!(w, "{} ", l))
     }
-    s.push('0');
+    write!(w, "{}", '0')
 }
 
-pub fn render_dimacs_formula(f: &Formula, s: &mut String) {
-    s.push_str("p cnf ");
-    s.push_str(f.maxvar.to_string().as_ref());
-    s.push(' ');
-    s.push_str(f.clauses.len().to_string().as_ref());
-    s.push('\n');
+pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W) -> io::Result<()> {
+    try!(writeln!(w, "p cnf {} {}", f.maxvar, f.clauses.len()));
     for c in f.clauses.iter() {
-        render_dimacs_clause(c, s);
-        s.push('\n');
+        try!(write_dimacs_clause(c, w));
+        try!(write!(w, "{}", '\n'));
     }
+    return Ok(())
 }
 
-pub fn render_sat_result_new(r: SatResult) -> String {
+pub fn write_sat_result<W: Write>(r: SatResult, w: &mut W) -> io::Result<()> {
     match r {
-        SatResult::Unsat => "s UNSATISFIABLE".to_string(),
+        SatResult::Unsat => write!(w, "{}", "s UNSATISFIABLE"),
         SatResult::Sat(ls) => {
-            let mut s = String::with_capacity(ls.len() * 8);
-            s.push_str("s SATISFIABLE\n");
-            s.push('v');
+            try!(writeln!(w, "{}", "s SATISFIABLE"));
+            try!(write!(w, "{}", 'v'));
             for l in ls.iter() {
-                s.push(' ');
-                s.push_str(l.to_string().as_ref());
+                try!(write!(w, " {}", l));
             }
-            s.push_str(" 0");
-            s
+            try!(write!(w, "{}", " 0"));
+            return Ok(());
         }
     }
 }
 
-pub fn render_dimacs_clause_new(c: &Clause) -> String {
+/*
+pub fn write_dimacs_clause_new<W: Write>(c: &Clause) -> String {
     let mut s = String::with_capacity(c.lits.len() * 8);
-    render_dimacs_clause(c, &mut s);
+    write_dimacs_clause(c, &mut s);
     return s
 }
 
-pub fn render_dimacs_formula_new(f: &Formula) -> String {
+pub fn write_dimacs_formula_new<W: Write>(f: &Formula) -> String {
     let maxcl = f.clauses.iter().map(|c| { c.lits.len() }).max().unwrap_or(0);
     let mut s = String::with_capacity(maxcl * f.clauses.len() * 8);
-    render_dimacs_formula(f, &mut s);
+    write_dimacs_formula(f, &mut s);
     return s
 }
+    */
 
 /*
 fn main() {
     let mc = parse_dimacs_clause("1 2 -3 0");
     match mc {
         None => println!("Clause parse failed."),
-        Some(c) => println!("{}", render_dimacs_clause_new(&c))
+        Some(c) => println!("{}", write_dimacs_clause_new(&c))
     }
     let mf = parse_dimacs_formula("p cnf 6 2\n1 -2 3 0\nc blah\n-4 5 6 0");
     match mf {
         None => println!("Formula parse failed."),
-        Some(f) => print!("{}", render_dimacs_formula_new(&f))
+        Some(f) => print!("{}", write_dimacs_formula_new(&f))
     }
 }
 */

@@ -10,13 +10,11 @@ use std::path::Path;
 pub fn main() {
     let vargs : Vec<String> = std::env::args().collect();
     if vargs.len() != 3 {
-        println!("Usage: tests <infile> <outfile>");
+        println!("Usage: copy_aiger <infile> <outfile>");
         return;
     }
-    let iname = &vargs[1];
-    let oname = &vargs[2];
-    let ipath = Path::new(iname);
-    let opath = Path::new(oname);
+    let ipath = Path::new(&vargs[1]);
+    let opath = Path::new(&vargs[2]);
     let fin = File::open(&ipath).ok().unwrap();
     let mut ib = BufReader::new(fin);
     let fout = File::create(&opath).ok().unwrap();
