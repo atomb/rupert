@@ -3,6 +3,7 @@ use cnf::Clause;
 use cnf::Formula;
 use cnf::SatResult;
 use cnf::SatResult::*;
+use std::collections::BTreeSet;
 use std::iter::repeat;
 use std::io;
 use std::io::Read;
@@ -22,10 +23,6 @@ fn find_lit(c: &Clause, l: isize) -> Option<usize> {
     return None
 }
 
-fn is_empty_clause(c: &Clause) -> bool {
-    c.lits.len() == 0
-}
-
 fn is_unit_clause(c: &Clause) -> Option<isize> {
     if c.lits.len() != 1 {
         None
@@ -38,11 +35,11 @@ fn mk_unit_clause(l: isize) -> Clause {
     Clause { lits : vec![l] }
 }
 
-fn is_all_units(f: &Formula) -> Option<Vec<isize>> {
-    let mut r = Vec::with_capacity(f.clauses.len());
+fn is_all_units(f: &Formula) -> Option<BTreeSet<isize>> {
+    let mut r = BTreeSet::new();
     for c in f.clauses.iter() {
         match is_unit_clause(c) {
-            Some(l) => r.push(l),
+            Some(l) => { r.insert(l); },
             None => return None
         }
     }
@@ -104,9 +101,9 @@ fn choose_literal(f: &Formula) -> isize {
 }
 
 pub fn dpll(f: &mut Formula) -> SatResult {
-    if f.clauses.iter().any(is_empty_clause) { return Unsat };
+    if f.clauses.iter().any(|c| { c.is_empty() }) { return Unsat };
     match is_all_units(f) {
-        Some(ls) => Sat(ls),
+        Some(ls) => Sat(ls.iter().cloned().collect()),
         None => {
             //println!("{}", f);
             for l in unit_clauses(f).iter()  { assign(f, *l) };

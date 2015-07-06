@@ -18,6 +18,8 @@ impl Clause {
     pub fn max_var(&self) -> usize {
         self.lits.iter().map(|x| { x.abs() }).max().unwrap_or(0) as usize
     }
+
+    pub fn is_empty(&self) -> bool { self.lits.len() == 0 }
 }
 
 impl Formula {
@@ -58,7 +60,7 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
     let cs = Vec::with_capacity(ncs);
     let mut f = Formula { clauses: cs, maxvar: 0 };
     for l in ls {
-        match parse_dimacs_clause(l) {
+        match parse_dimacs_clause(l.trim()) {
             Some(c) => f.add_clause(c),
             None => return None
         }
@@ -67,14 +69,16 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
 }
 
 
-pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W) -> io::Result<()> {
+pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W)
+                                     -> io::Result<()> {
     for l in c.lits.iter() {
         try!(write!(w, "{} ", l))
     }
     write!(w, "{}", '0')
 }
 
-pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W) -> io::Result<()> {
+pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W)
+                                      -> io::Result<()> {
     try!(writeln!(w, "p cnf {} {}", f.maxvar, f.clauses.len()));
     for c in f.clauses.iter() {
         try!(write_dimacs_clause(c, w));
@@ -83,7 +87,8 @@ pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W) -> io::Result<()> 
     return Ok(())
 }
 
-pub fn write_sat_result<W: Write>(r: SatResult, w: &mut W) -> io::Result<()> {
+pub fn write_sat_result<W: Write>(r: SatResult, w: &mut W)
+                                  -> io::Result<()> {
     match r {
         SatResult::Unsat => write!(w, "{}", "s UNSATISFIABLE"),
         SatResult::Sat(ls) => {
@@ -92,7 +97,7 @@ pub fn write_sat_result<W: Write>(r: SatResult, w: &mut W) -> io::Result<()> {
             for l in ls.iter() {
                 try!(write!(w, " {}", l));
             }
-            try!(write!(w, "{}", " 0"));
+            try!(writeln!(w, "{}", " 0"));
             return Ok(());
         }
     }
