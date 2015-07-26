@@ -6,6 +6,7 @@ use std::io;
 use std::io::BufRead;
 use std::io::Read;
 use std::io::Write;
+use std::ops::BitAnd;
 use std::ops::Not;
 use std::result::Result;
 
@@ -423,22 +424,32 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     return Ok(())
 }
 
+// TODO: implement Zero once it's stable
 // NB: this is only reasonable for types for which clone() is a no-op
-pub fn eval_lit<T: Clone + Not<Output=T>>(vals: &Vec<T>, l: Lit) -> T {
+pub trait LitValue : Clone + Not<Output=Self> + BitAnd<Output=Self> {
+    fn zero() -> Self;
+}
+
+impl LitValue for u64 {
+    fn zero() -> u64 { 0 }
+}
+
+// NB: this is only reasonable for types for which clone() is a no-op
+#[inline(always)]
+fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
     let val = vals[lit_to_var(l) as usize].clone();
     if lit_sign(l) { !val } else { val }
 }
 
-// This can become more polymorphic once Zero is stable
-pub fn eval_aig(aig: &MapAIG, ins: &Vec<u64>) -> Vec<u64> {
+pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let ni = aig.num_inputs();
     assert!(ni == ins.len());
     let nl = aig.num_latches();
     let no = aig.num_outputs();
     let na = aig.num_ands();
     let mut vals = Vec::with_capacity(ni + nl + na);
-    for  v in ins   { vals.push(*v); }
-    for _i in 0..nl { vals.push(0); }
+    for  v in ins   { vals.push(v.clone()); }
+    for _i in 0..nl { vals.push(LitValue::zero()); }
     for (l, &(r0, r1)) in &aig.ands {
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
