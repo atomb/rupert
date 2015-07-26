@@ -105,10 +105,15 @@ pub type ParseResult<T> = Result<T, String>;
 
 pub static FALSE_LIT : Lit = 0;
 pub static TRUE_LIT  : Lit = 1;
+#[inline(always)]
 pub fn lit_sign   (l: Lit) -> bool { l & 1 == 1 }
+#[inline(always)]
 pub fn lit_strip  (l: Lit) -> Lit  { l & (!1) }
+#[inline(always)]
 pub fn lit_not    (l: Lit) -> Lit  { l ^ 1 }
+#[inline(always)]
 pub fn var_to_lit (v: Var) -> Lit  { v << 1 }
+#[inline(always)]
 pub fn lit_to_var (l: Lit) -> Var  { l >> 1 }
 
 fn compact_and(a: And) -> CompactAnd {
