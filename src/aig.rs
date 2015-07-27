@@ -33,7 +33,7 @@ pub struct Header {
 
 pub struct AIGER<T: AIG> {
     header: Header,
-    body: T,
+    pub body: T, // TODO!
     symbols: Vec<String>,
     comments: Vec<String>
 }
