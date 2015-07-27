@@ -279,7 +279,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
                 let i = try!(parse_io(s.as_ref()));
                 is.push(i);
             },
-        Binary => ()
+        Binary => for n in 0 .. ic { is.push(var_to_lit(n + 1)); }
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
