@@ -435,6 +435,10 @@ pub trait LitValue : Clone + Not<Output=Self> + BitAnd<Output=Self> {
     fn zero() -> Self;
 }
 
+impl LitValue for bool {
+    fn zero() -> bool { false }
+}
+
 impl LitValue for u64 {
     fn zero() -> u64 { 0 }
 }
