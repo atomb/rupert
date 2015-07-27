@@ -452,13 +452,17 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let nl = aig.num_latches();
     let no = aig.num_outputs();
     let na = aig.num_ands();
-    let mut vals = Vec::with_capacity(ni + nl + na);
+    let mut vals = Vec::with_capacity(ni + nl + na + 1);
+    vals.push(LitValue::zero());
     for  v in ins   { vals.push(v.clone()); }
     for _i in 0..nl { vals.push(LitValue::zero()); }
+    let mut n = ni + nl + 1;
     for (l, &(r0, r1)) in &aig.ands {
+        assert!(lit_to_var(*l) == n as u64);
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
-        vals[lit_to_var(*l) as usize] = r0v & r1v;
+        vals.push(r0v & r1v);
+        n = n + 1;
     }
     let mut outs = Vec::with_capacity(no);
     for l in aig.outputs() {
