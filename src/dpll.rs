@@ -128,8 +128,9 @@ pub fn read_file(file: &String, buf: &mut Vec<u8>) -> io::Result<usize> {
 }
 
 pub fn do_dpll(f: Formula) {
-    let mut f0 = f;
-    match cnf::write_sat_result(dpll(&mut f0), &mut io::stdout()) {
+    let mut f0 = f.clone();
+    let r = dpll(&mut f0);
+    match cnf::write_sat_result(&f, r, &mut io::stdout()) {
         Ok(()) => (),
         Err(e) => println!("{}", e)
     }

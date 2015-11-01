@@ -35,6 +35,27 @@ impl Formula {
     }
 }
 
+fn sat_vec_to_model(m: &Vec<isize>, maxvar: usize) -> Vec<bool> {
+    let mut r = vec![false; maxvar + 1];
+    for &l in m {
+        r[l.abs() as usize] = l > 0;
+    }
+    return r
+}
+
+fn eval_clause(c: &Clause, m: &Vec<bool>) -> bool {
+    c.lits.iter().any(|&l| m[l.abs() as usize] == (l > 0))
+}
+
+fn eval_formula(f: &Formula, m: &Vec<bool>) -> bool {
+    f.clauses.iter().all(|c| eval_clause(c, m))
+}
+
+fn eval_formula_on_result(f: &Formula, r: &Vec<isize>) -> bool {
+    eval_formula(f, &sat_vec_to_model(r, f.maxvar))
+}
+
+
 fn parse_dimacs_clause(l: &str) -> Option<Clause> {
     let mut ls = Vec::new();
     for w in l.split(' ') {
@@ -87,17 +108,19 @@ pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W)
     return Ok(())
 }
 
-pub fn write_sat_result<W: Write>(r: SatResult, w: &mut W)
+pub fn write_sat_result<W: Write>(f: &Formula, r: SatResult, w: &mut W)
                                   -> io::Result<()> {
     match r {
         SatResult::Unsat => write!(w, "{}", "s UNSATISFIABLE"),
         SatResult::Sat(ls) => {
             try!(writeln!(w, "{}", "s SATISFIABLE"));
             try!(write!(w, "{}", 'v'));
-            for l in ls.iter() {
+            for l in &ls {
                 try!(write!(w, " {}", l));
             }
             try!(writeln!(w, "{}", " 0"));
+            let good = eval_formula_on_result(f, &ls);
+            if !good { try!(writeln!(w, "{}", "**BAD RESULT**")); }
             return Ok(());
         }
     }
