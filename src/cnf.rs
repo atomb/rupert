@@ -92,7 +92,7 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
 
 pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W)
                                      -> io::Result<()> {
-    for l in c.lits.iter() {
+    for l in &c.lits {
         try!(write!(w, "{} ", l))
     }
     write!(w, "{}", '0')
@@ -101,7 +101,7 @@ pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W)
 pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W)
                                       -> io::Result<()> {
     try!(writeln!(w, "p cnf {} {}", f.maxvar, f.clauses.len()));
-    for c in f.clauses.iter() {
+    for c in &f.clauses {
         try!(write_dimacs_clause(c, w));
         try!(write!(w, "{}", '\n'));
     }

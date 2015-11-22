@@ -28,7 +28,7 @@ impl fmt::Display for SatResult {
             &SatResult::Error => write!(f, "error"),
             &SatResult::Sat(ref m) => {
                 try!(write!(f, "sat"));
-                for (v, b) in m.iter() {
+                for (v, b) in m {
                     try!(write!(f, " {}:{}", v, b));
                 }
                 Ok(())

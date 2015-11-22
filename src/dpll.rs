@@ -4,7 +4,6 @@ use cnf::Formula;
 use cnf::SatResult;
 use cnf::SatResult::*;
 use std::collections::BTreeSet;
-use std::iter::repeat;
 use std::io;
 use std::io::Read;
 
@@ -37,7 +36,7 @@ fn mk_unit_clause(l: isize) -> Clause {
 
 fn is_all_units(f: &Formula) -> Option<BTreeSet<isize>> {
     let mut r = BTreeSet::new();
-    for c in f.clauses.iter() {
+    for c in &f.clauses {
         match is_unit_clause(c) {
             Some(l) => { r.insert(l); },
             None => return None
@@ -51,10 +50,10 @@ fn unit_clauses(f: &Formula) -> Vec<isize> {
 }
 
 fn pure_literals(f: &Formula) -> Vec<isize> {
-    let mut vsum : Vec<isize> = repeat(0).take(f.maxvar + 1).collect();
-    let mut vcount : Vec<isize> = repeat(0).take(f.maxvar + 1).collect();
-    for c in f.clauses.iter() {
-        for l in c.lits.iter() {
+    let mut vsum : Vec<isize> = vec![0; f.maxvar + 1];
+    let mut vcount : Vec<isize> = vec![0; f.maxvar + 1];
+    for c in &f.clauses {
+        for l in &c.lits {
             let v = l.abs() as usize;
             vsum[v] = vsum[v] + l.signum();
             vcount[v] = vcount[v] + 1;
@@ -71,7 +70,7 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
 }
 
 fn assign(f: &mut Formula, l: isize) {
-    for c in f.clauses.iter_mut() {
+    for c in &mut f.clauses {
         if c.lits.iter().any(|ll| { *ll == l }) {
             *c = mk_unit_clause(l);
         } else {
@@ -91,7 +90,7 @@ fn choose_literal(f: &Formula) -> isize {
     // No clause can have more than maxvar literals
     let mut minlen = f.maxvar;
     let mut lit = 0;
-    for c in f.clauses.iter() {
+    for c in &f.clauses {
         if c.lits.len() < minlen && c.lits.len() > 1 {
             minlen = c.lits.len();
             lit = c.lits[0];
@@ -106,8 +105,8 @@ pub fn dpll(f: &mut Formula) -> SatResult {
         Some(ls) => Sat(ls.iter().cloned().collect()),
         None => {
             //println!("{}", f);
-            for l in unit_clauses(f).iter()  { assign(f, *l) };
-            for l in pure_literals(f).iter() { assign(f, *l) };
+            for l in &unit_clauses(f)  { assign(f, *l) };
+            for l in &pure_literals(f) { assign(f, *l) };
             //println!("{}", f);
             let l = choose_literal(f);
             //println!("{}", l);
