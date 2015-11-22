@@ -86,6 +86,7 @@ fn assign(f: &mut Formula, l: isize) {
 // Can return a negative value, in which case the negated literal will
 // be the first one to try, and only if it fails will the positive
 // version be tried.
+// TODO: this can choose a literal that has already been assigned
 fn choose_literal(f: &Formula) -> isize {
     // No clause can have more than maxvar literals
     let mut minlen = f.maxvar;
@@ -112,6 +113,7 @@ pub fn dpll(f: &mut Formula) -> SatResult {
             for l in &unit_clauses(f)  { assign(f, *l) };
             for l in &pure_literals(f) { assign(f, *l) };
             //println!("{}", f);
+            // TODO: deal with return value of 0
             let l = choose_literal(f);
             //println!("{}", l);
             let mut fcopy = f.clone();
