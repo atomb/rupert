@@ -102,7 +102,11 @@ fn choose_literal(f: &Formula) -> isize {
 pub fn dpll(f: &mut Formula) -> SatResult {
     if f.clauses.iter().any(|c| { c.is_empty() }) { return Unsat };
     match is_all_units(f) {
-        Some(ls) => Sat(ls.iter().cloned().collect()),
+        Some(ls) => {
+            let mut lv : Vec<isize> = ls.iter().cloned().collect();
+            lv.sort_by(|a,b| (a.abs()).cmp(&b.abs()));
+            Sat(lv)
+        }
         None => {
             //println!("{}", f);
             for l in &unit_clauses(f)  { assign(f, *l) };
