@@ -1,7 +1,7 @@
-extern crate rust_prover;
+extern crate rupert;
 
-use rust_prover::cnf;
-use rust_prover::dpll;
+use rupert::cnf;
+use rupert::dpll;
 use std::env;
 use std::process;
 use std::str;

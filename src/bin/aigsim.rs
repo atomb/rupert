@@ -1,7 +1,7 @@
-extern crate rust_prover;
+extern crate rupert;
 
-use rust_prover::aig;
-use rust_prover::aig::AIG;
+use rupert::aig;
+use rupert::aig::AIG;
 
 use std::fs::File;
 use std::io::BufRead;
