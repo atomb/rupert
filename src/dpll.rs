@@ -7,33 +7,12 @@ use std::collections::BTreeSet;
 use std::io;
 use std::io::Read;
 
-/*
-struct Solver {
-    clauses : Vec<Clause>,
-    occurs  : Vec<Vec<isize>>,
-    assigns : Vec<isize>,
-    maxvar  : isize,
-}
-*/
-
-fn find_lit(c: &Clause, l: isize) -> Option<usize> {
-    // TODO: store lits sorted so we can use binary_search?
-    for i in 0..c.lits.len() {
-        if c.lits[i] == l { return Some(i) }
-    }
-    return None
-}
-
 fn is_unit_clause(c: &Clause) -> Option<isize> {
     if c.lits.len() != 1 {
         None
     } else {
         Some(c.lits[0])
     }
-}
-
-fn mk_unit_clause(l: isize) -> Clause {
-    Clause { lits : vec![l] }
 }
 
 fn unit_clauses(f: &Formula) -> BTreeSet<isize> {
@@ -100,12 +79,12 @@ pub fn dpll(f0: &Formula, assgn0: &Vec<isize>) -> SatResult {
         Sat(assgn)
     } else {
         let mut f = f0.clone();
-        let units = &unit_clauses(&f);
-        for l in units { f = assign(&f, *l); assgn.push(*l); };
-        let pures = &pure_literals(&f);
-        for l in pures { f = assign(&f, *l); assgn.push(*l) };
+        for l in &unit_clauses(&f)  { f = assign(&f, *l); assgn.push(*l); };
+        for l in &pure_literals(&f) { f = assign(&f, *l); assgn.push(*l); };
         let l = choose_literal(&f);
         if l == 0 {
+            // Couldn't find a literal to assign, so one further call
+            // should finish things.
             dpll(&f, &assgn)
         } else {
             let f1 = assign(&f, l);

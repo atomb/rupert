@@ -3,10 +3,16 @@ use std::io;
 use std::io::Write;
 
 #[derive (Debug, Clone)]
-pub struct Clause { pub lits: Vec<isize> }
+pub struct Clause {
+    #[doc = "Sorted vector of literals"]
+    pub lits: Vec<isize>
+}
 
 #[derive (Debug, Clone)]
-pub struct Formula { pub clauses: Vec<Clause>, pub maxvar: usize }
+pub struct Formula {
+    pub clauses: Vec<Clause>,
+    pub maxvar: usize
+}
 
 #[derive (Debug)]
 pub enum SatResult {
@@ -126,33 +132,3 @@ pub fn write_sat_result<W: Write>(f: &Formula, r: SatResult, w: &mut W)
         }
     }
 }
-
-/*
-pub fn write_dimacs_clause_new<W: Write>(c: &Clause) -> String {
-    let mut s = String::with_capacity(c.lits.len() * 8);
-    write_dimacs_clause(c, &mut s);
-    return s
-}
-
-pub fn write_dimacs_formula_new<W: Write>(f: &Formula) -> String {
-    let maxcl = f.clauses.iter().map(|c| { c.lits.len() }).max().unwrap_or(0);
-    let mut s = String::with_capacity(maxcl * f.clauses.len() * 8);
-    write_dimacs_formula(f, &mut s);
-    return s
-}
-    */
-
-/*
-fn main() {
-    let mc = parse_dimacs_clause("1 2 -3 0");
-    match mc {
-        None => println!("Clause parse failed."),
-        Some(c) => println!("{}", write_dimacs_clause_new(&c))
-    }
-    let mf = parse_dimacs_formula("p cnf 6 2\n1 -2 3 0\nc blah\n-4 5 6 0");
-    match mf {
-        None => println!("Formula parse failed."),
-        Some(f) => print!("{}", write_dimacs_formula_new(&f))
-    }
-}
-*/
