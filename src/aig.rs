@@ -1,6 +1,6 @@
 use std::cmp;
 use std::collections::BTreeMap;
-//use std::collections::HashMap;
+use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::io::BufRead;
@@ -40,18 +40,17 @@ pub struct AIGER<T: AIG> {
 
 pub struct MapAIG {
     inputs: Vec<PosLit>,
-    latches: Vec<(PosLit, Lit)>,
+    latches: Vec<Latch>,
     outputs: Vec<Lit>,
     ands: BTreeMap<PosLit, (Lit, Lit)>,
     maxlit: PosLit
 }
 
-/*
-pub struct CompactAIG {
-    ninputs: u64,
+pub struct VecAIG {
+    inputs: u64,
     latches: Vec<Lit>,
     outputs: Vec<Lit>,
-    ands: Vec<CompactAnd>
+    ands: Vec<CompactAnd>,
 }
 
 pub struct HashedAIG<T> {
@@ -59,9 +58,8 @@ pub struct HashedAIG<T> {
     hash: HashMap<(Lit, Lit), Var>
 }
 
-type CompactHashedAIG = HashedAIG<CompactAIG>;
-type CompactHashedAIGER = AIGER<HashedAIG<CompactAIG>>;
-*/
+type CompactHashedAIG = HashedAIG<VecAIG>;
+type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 
 pub trait AIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
@@ -78,6 +76,19 @@ pub trait AIG {
     fn num_ands(&self) -> usize;
     fn maxlit(&self) -> PosLit;
     //fn eval(&self, ...) -> ...;
+    //fn mem_use(&self) -> usize;
+}
+
+impl MapAIG {
+    pub fn new() -> MapAIG {
+        MapAIG {
+            inputs: Vec::new(),
+            latches: Vec::new(),
+            outputs: Vec::new(),
+            ands: BTreeMap::new(),
+            maxlit: 0
+        }
+    }
 }
 
 impl AIG for MapAIG {
@@ -99,6 +110,62 @@ impl AIG for MapAIG {
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxlit(&self)      -> PosLit { self.maxlit }
     fn outputs(&self)     -> &Vec<Lit> { &self.outputs }
+    /*
+    fn mem_use(&self)     -> usize {
+        // Extra heap data pointed to by Vecs is straightforward.
+        let ivecsize = self.inputs.capacity() * size_of::<PosLit>();
+        let lvecsize = self.latches.capacity() * size_of::<Latch>();
+        let ovecsize = self.latches.capacity() * size_of::<Lit>();
+        let acap = self.ands.capacity();
+        // Extra heap data pointed to by HashMaps is trickier (and could change!).
+        let amapsize = acap*size_of::<u64>() +
+                       acap*size_of::<PosLit>() +
+                       acap*size_of::<(Lit, Lit)>();
+        ivecsize + lvecsize + ovecsize + amapsize + size_of::<MapAIG>()
+    }
+    */
+}
+
+impl VecAIG {
+    pub fn new(ninputs: u64, nlatches: u64) -> VecAIG {
+        VecAIG {
+            inputs: ninputs,
+            latches: vec![0; nlatches as usize],
+            outputs: Vec::new(),
+            ands: Vec::new()
+        }
+    }
+}
+
+impl AIG for VecAIG {
+    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+        let n = next_lit(self.ands.len() as u64);
+        self.ands.push(compact_and((n, (l, r))));
+        n
+    }
+    fn add_output(&mut self, o: Lit) {
+        self.outputs.push(o);
+    }
+    fn set_next(&mut self, l: PosLit, n: Lit) {
+        self.latches[lit_to_var(l) as usize] = n;
+    }
+    fn num_inputs(&self)  -> usize  { self.inputs as usize }
+    fn num_latches(&self) -> usize  { self.latches.len() }
+    fn num_outputs(&self) -> usize  { self.outputs.len() }
+    fn num_ands(&self)    -> usize  { self.ands.len() }
+    fn maxlit(&self)      -> PosLit {
+        var_to_lit(self.inputs + (self.num_latches() + self.num_ands()) as u64)
+    }
+    fn outputs(&self)     -> &Vec<Lit> { &self.outputs }
+    /*
+    fn mem_use(&self)     -> usize {
+        // Extra heap data pointed to by Vecs is straightforward.
+        let lvecsize = self.latches.capacity() * size_of::<Lit>();
+        let ovecsize = self.latches.capacity() * size_of::<Lit>();
+        let avecsize = self.ands.capacity() * size_of::<CompactAnd>();
+        lvecsize + ovecsize + avecsize + size_of::<VecAIG>()
+    }
+    */
 }
 
 pub type ParseResult<T> = Result<T, String>;
@@ -115,6 +182,8 @@ pub fn lit_not    (l: Lit) -> Lit  { l ^ 1 }
 pub fn var_to_lit (v: Var) -> Lit  { v << 1 }
 #[inline(always)]
 pub fn lit_to_var (l: Lit) -> Var  { l >> 1 }
+#[inline(always)]
+pub fn next_lit   (l: Lit) -> Lit  { l + 2  }
 
 fn compact_and(a: And) -> CompactAnd {
     match a { (n, (l, r)) => ((n - l) as u32, (l - r) as u32) }
@@ -419,6 +488,8 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     for o in b.outputs {
         try!(write_io(o, w));
     }
+    // TODO: the following would need to include an explicit sorting
+    // step in order to use HashMap instead of BTreeMap.
     match g.header.aigtype {
         ASCII  => for l in b.ands { try!(write_and_ascii(l, w)); },
         Binary => for l in b.ands { try!(write_and_binary(l, w)); }
@@ -427,6 +498,13 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     if g.comments.len() > 0 { try!(writeln!(w, "c"))     }
     for s in g.comments     { try!(writeln!(w, "{}", s)) }
     return Ok(())
+}
+
+pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
+    HashedAIG {
+        aig: aig,
+        hash: HashMap::new() // TODO
+    }
 }
 
 // TODO: implement Zero once it's stable
