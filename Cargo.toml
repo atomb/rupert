@@ -1,5 +1,5 @@
 [package]
-name = "rust-prover"
+name = "rupert"
 version = "0.0.1"
 authors = ["Aaron Tomb <aarontomb@gmail.com>"]
 
