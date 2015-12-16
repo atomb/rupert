@@ -486,6 +486,11 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
 
 #[cfg(test)]
 mod tests {
+    extern crate quickcheck;
+
+    use self::quickcheck::quickcheck;
+    use self::quickcheck::TestResult;
+
     use super::push_delta;
     use super::pop_delta;
     use super::compact_and;
@@ -506,8 +511,11 @@ mod tests {
         }
     }
 
-    fn prop_expand_compact(a: And) -> bool {
-        a == expand_and(compact_and(a), a.0)
+    fn prop_expand_compact(a: And) -> TestResult {
+        match a {
+            (n, (l, r)) if n <= l || l <= r => TestResult::discard(),
+            _ => TestResult::from_bool(a == expand_and(compact_and(a), a.0))
+        }
     }
 
     #[test]
@@ -523,11 +531,13 @@ mod tests {
         assert!(prop_push_pop(0x10000));
         assert!(prop_push_pop(0xfffffffe));
         assert!(prop_push_pop(0xffffffff));
+        quickcheck(prop_push_pop as fn(u32) -> bool);
     }
 
     #[test]
     fn do_expand_compact() {
-        assert!(prop_expand_compact((2, (1, 0))));
-        assert!(prop_expand_compact((4096, (1024, 1023))));
+        assert!(!prop_expand_compact((2, (1, 0))).is_failure());
+        assert!(!prop_expand_compact((4096, (1024, 1023))).is_failure());
+        quickcheck(prop_expand_compact as fn(And) -> TestResult);
     }
 }

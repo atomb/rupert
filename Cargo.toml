@@ -3,6 +3,9 @@ name = "rust-prover"
 version = "0.0.1"
 authors = ["Aaron Tomb <aarontomb@gmail.com>"]
 
+[dev-dependencies]
+quickcheck = "0.2"
+
 [profile.dev]
 opt-level = 0
 debug = true
