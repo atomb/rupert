@@ -51,12 +51,12 @@ pub fn main() {
     match (r1, r2) {
         (Ok(aig), Some(vals)) =>
             for val in &vals {
-                if val.len() != (&aig.body).num_inputs() {
+                if val.len() != aig.num_inputs() {
                     println!("Line has {} values but model has {} inputs.",
-                             val.len(), (&aig.body).num_inputs());
+                             val.len(), aig.num_inputs());
                     return;
                 }
-                let result = aig::eval_aig(&aig.body, val);
+                let result = aig::eval_aig(aig.get_body(), val);
                 println!(" {} {}", render(val), render(&result));
             },
         (Err(e), _) => println!("Error: {}", e),

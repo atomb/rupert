@@ -33,15 +33,36 @@ pub struct Header {
 
 pub struct AIGER<T: AIG> {
     header: Header,
-    pub body: T, // TODO!
+    body: T,
     symbols: Vec<String>,
     comments: Vec<String>
+}
+
+impl<A: AIG> AIGER<A> {
+    pub fn new(aig: A, typ: AIGType) -> Self {
+        AIGER {
+            header: Header {
+                aigtype: typ,
+                maxvar: lit_to_var(aig.maxlit()),
+                ninputs: aig.num_inputs() as u64,
+                nlatches: aig.num_latches() as u64,
+                noutputs: aig.num_outputs() as u64,
+                nands: aig.num_ands() as u64
+            },
+            body: aig,
+            symbols: vec![],
+            comments: vec![]
+        }
+    }
+    pub fn get_body(&self) -> &A { &self.body }
 }
 
 pub struct MapAIG {
     inputs: Vec<PosLit>,
     latches: Vec<Latch>,
     outputs: Vec<Lit>,
+    // NB: this must be a BTreeMap to generate valid AIGER files without
+    // an explicit sorting step.
     ands: BTreeMap<PosLit, (Lit, Lit)>,
     maxlit: PosLit
 }
@@ -53,7 +74,7 @@ pub struct VecAIG {
     ands: Vec<CompactAnd>,
 }
 
-pub struct HashedAIG<T> {
+pub struct HashedAIG<T: AIG> {
     aig: T,
     hash: HashMap<(Lit, Lit), Var>
 }
@@ -62,13 +83,20 @@ type CompactHashedAIG = HashedAIG<VecAIG>;
 type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 
 pub trait AIG {
+    //type Ands : Iterator<Item=And>;
+    //type Lits : Iterator<Item=PosLit>;
+    // fn add_input(&mut self) -> PosLit
+    // fn add_latch(&mut self, n: Lit) -> PosLit
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
     fn add_output(&mut self, o: Lit);
-    fn set_next(&mut self, l: PosLit, n: Lit);
     /*
     fn get_and(&self, l: PosLit) -> (Lit, Lit);
     fn get_next(&self, l: PosLit) -> Lit;
     */
+    //fn ands(&self) -> Self::Ands;
+    //fn inputs(&self) -> Self::Lits;
+    //fn latches(&self) -> Self::Lits;
+    //fn outputs(&self) -> Self::Lits;
     fn outputs(&self) -> &Vec<Lit>;
     fn num_inputs(&self) -> usize;
     fn num_latches(&self) -> usize;
@@ -101,9 +129,6 @@ impl AIG for MapAIG {
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
-    fn set_next(&mut self, l: PosLit, n: Lit) {
-        self.latches.push((l, n));
-    }
     fn num_inputs(&self)  -> usize  { self.inputs.len() }
     fn num_latches(&self) -> usize  { self.latches.len() }
     fn num_outputs(&self) -> usize  { self.outputs.len() }
@@ -126,6 +151,41 @@ impl AIG for MapAIG {
     */
 }
 
+impl<A: AIG> AIG for HashedAIG<A> {
+    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+        match self.hash.get(&(l, r)) {
+            Some(l) => *l,
+            None => self.aig.add_and(l, r)
+        }
+    }
+    fn add_output(&mut self, o: Lit) {
+        self.aig.add_output(o)
+    }
+    fn num_inputs(&self)  -> usize  { self.aig.num_inputs() }
+    fn num_latches(&self) -> usize  { self.aig.num_latches() }
+    fn num_outputs(&self) -> usize  { self.aig.num_outputs() }
+    fn num_ands(&self)    -> usize  { self.aig.num_ands() }
+    fn maxlit(&self)      -> PosLit { self.aig.maxlit() }
+    fn outputs(&self)     -> &Vec<Lit> { &self.aig.outputs() }
+}
+
+impl<A: AIG> AIG for AIGER<A> {
+    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+        // TODO: Update header
+        self.body.add_and(l, r)
+    }
+    fn add_output(&mut self, o: Lit) {
+        // TODO: Update header
+        self.body.add_output(o)
+    }
+    fn num_inputs(&self)  -> usize  { self.body.num_inputs() }
+    fn num_latches(&self) -> usize  { self.body.num_latches() }
+    fn num_outputs(&self) -> usize  { self.body.num_outputs() }
+    fn num_ands(&self)    -> usize  { self.body.num_ands() }
+    fn maxlit(&self)      -> PosLit { self.body.maxlit() }
+    fn outputs(&self)     -> &Vec<Lit> { &self.body.outputs() }
+}
+
 impl VecAIG {
     pub fn new(ninputs: u64, nlatches: u64) -> VecAIG {
         VecAIG {
@@ -145,9 +205,6 @@ impl AIG for VecAIG {
     }
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
-    }
-    fn set_next(&mut self, l: PosLit, n: Lit) {
-        self.latches[lit_to_var(l) as usize] = n;
     }
     fn num_inputs(&self)  -> usize  { self.inputs as usize }
     fn num_latches(&self) -> usize  { self.latches.len() }
@@ -331,13 +388,17 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
     }
 }
 
+// This constructs a MapAIG because the ASCII AIGER file format
+// technically allows weird orderings, which MapAIG supports but VecAIG
+// does not. An alternative implementation that worked only on binary
+// AIGER files and generated a VecAIG would make sense.
 pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
     let mut is = Vec::with_capacity(h.ninputs as usize);
     let mut ls = Vec::with_capacity(h.nlatches as usize);
     let mut os = Vec::with_capacity(h.noutputs as usize);
-    let mut gs = BTreeMap::new(); // TODO: capacity?
+    let mut gs = BTreeMap::new();
     let ic = h.ninputs;
     let lc = h.nlatches;
     let ac = h.nands;
@@ -488,8 +549,8 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     for o in b.outputs {
         try!(write_io(o, w));
     }
-    // TODO: the following would need to include an explicit sorting
-    // step in order to use HashMap instead of BTreeMap.
+    // NB: the following would need to include an explicit sorting step
+    // in order to use HashMap instead of BTreeMap.
     match g.header.aigtype {
         ASCII  => for l in b.ands { try!(write_and_ascii(l, w)); },
         Binary => for l in b.ands { try!(write_and_binary(l, w)); }
@@ -503,7 +564,7 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
 pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
     HashedAIG {
         aig: aig,
-        hash: HashMap::new() // TODO
+        hash: HashMap::new() // TODO: need to be able to iterate through ands
     }
 }
 
