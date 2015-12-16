@@ -65,6 +65,7 @@ fn parse_dimacs_clause(l: &str) -> Option<Clause> {
             Err(_) => return None
         }
     };
+    ls.sort();
     return Some(Clause { lits : ls })
 }
 

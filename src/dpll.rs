@@ -63,7 +63,7 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
 fn assign(f: &Formula, l: isize) -> Formula {
     let mut newcs = vec![];
     for c in &f.clauses {
-        if find_lit(c, l).is_none() {
+        if c.lits.binary_search(&l).is_err() {
             let lneg = -l;
             let lsnew =
                 c.lits.iter().cloned().filter(|ll| *ll != lneg).collect();
