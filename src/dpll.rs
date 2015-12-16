@@ -11,11 +11,13 @@ use std::io::Read;
 struct Solver {
     clauses : Vec<Clause>,
     occurs  : Vec<Vec<isize>>,
+    assigns : Vec<isize>,
     maxvar  : isize,
 }
 */
 
 fn find_lit(c: &Clause, l: isize) -> Option<usize> {
+    // TODO: store lits sorted so we can use binary_search?
     for i in 0..c.lits.len() {
         if c.lits[i] == l { return Some(i) }
     }
@@ -34,18 +36,7 @@ fn mk_unit_clause(l: isize) -> Clause {
     Clause { lits : vec![l] }
 }
 
-fn is_all_units(f: &Formula) -> Option<BTreeSet<isize>> {
-    let mut r = BTreeSet::new();
-    for c in &f.clauses {
-        match is_unit_clause(c) {
-            Some(l) => { r.insert(l); },
-            None => return None
-        }
-    }
-    return Some(r)
-}
-
-fn unit_clauses(f: &Formula) -> Vec<isize> {
+fn unit_clauses(f: &Formula) -> BTreeSet<isize> {
     f.clauses.iter().filter_map(is_unit_clause).collect()
 }
 
@@ -60,7 +51,7 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
         }
     }
     let mut res = Vec::with_capacity(f.maxvar);
-    for v in (1 .. f.maxvar + 1) {
+    for v in 1 .. f.maxvar + 1 {
         let sum = vsum[v];
         if sum.abs() == vcount[v] && sum != 0 {
             res.push(v as isize * sum.signum());
@@ -69,24 +60,25 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
     return res
 }
 
-fn assign(f: &mut Formula, l: isize) {
-    for c in &mut f.clauses {
-        if c.lits.iter().any(|ll| { *ll == l }) {
-            *c = mk_unit_clause(l);
-        } else {
+fn assign(f: &Formula, l: isize) -> Formula {
+    let mut newcs = vec![];
+    for c in &f.clauses {
+        if find_lit(c, l).is_none() {
             let lneg = -l;
-            match find_lit(&c, lneg) {
-                Some(i) => { c.lits.swap_remove(i); }
-                None => ()
-            }
+            let lsnew =
+                c.lits.iter().cloned().filter(|ll| *ll != lneg).collect();
+            newcs.push(Clause { lits : lsnew });
         }
+    }
+    Formula {
+        clauses: newcs,
+        maxvar: f.maxvar
     }
 }
 
 // Can return a negative value, in which case the negated literal will
 // be the first one to try, and only if it fails will the positive
 // version be tried.
-// TODO: this can choose a literal that has already been assigned
 fn choose_literal(f: &Formula) -> isize {
     // No clause can have more than maxvar literals
     let mut minlen = f.maxvar;
@@ -100,26 +92,34 @@ fn choose_literal(f: &Formula) -> isize {
     return lit
 }
 
-pub fn dpll(f: &mut Formula) -> SatResult {
-    if f.clauses.iter().any(|c| { c.is_empty() }) { return Unsat };
-    match is_all_units(f) {
-        Some(ls) => {
-            let mut lv : Vec<isize> = ls.iter().cloned().collect();
-            lv.sort_by(|a,b| (a.abs()).cmp(&b.abs()));
-            Sat(lv)
-        }
-        None => {
-            //println!("{}", f);
-            for l in &unit_clauses(f)  { assign(f, *l) };
-            for l in &pure_literals(f) { assign(f, *l) };
-            //println!("{}", f);
-            // TODO: deal with return value of 0
-            let l = choose_literal(f);
-            //println!("{}", l);
-            let mut fcopy = f.clone();
-            assign(f, l);
-            assign(&mut fcopy, -l);
-            match dpll(f) { Unsat => dpll(&mut fcopy), r => r }
+pub fn dpll(f0: &Formula, assgn0: &Vec<isize>) -> SatResult {
+    let mut assgn = assgn0.clone();
+    if f0.clauses.iter().any(|c| { c.is_empty() }) { return Unsat };
+    if f0.clauses.len() == 0 {
+        assgn.sort_by(|a,b| a.abs().cmp(&b.abs()));
+        Sat(assgn)
+    } else {
+        let mut f = f0.clone();
+        let units = &unit_clauses(&f);
+        for l in units { f = assign(&f, *l); assgn.push(*l); };
+        let pures = &pure_literals(&f);
+        for l in pures { f = assign(&f, *l); assgn.push(*l) };
+        let l = choose_literal(&f);
+        if l == 0 {
+            dpll(&f, &assgn)
+        } else {
+            let f1 = assign(&f, l);
+            let mut a1 = assgn.clone();
+            a1.push(l);
+            match dpll(&f1, &a1) {
+                Unsat => {
+                    let f2 = assign(&f, -l);
+                    let mut a2 = assgn.clone();
+                    a2.push(-l);
+                    dpll(&f2, &a2)
+                },
+                r => r
+            }
         }
     }
 }
@@ -132,10 +132,9 @@ pub fn read_file(file: &String, buf: &mut Vec<u8>) -> io::Result<usize> {
     fh.read_to_end(buf)
 }
 
-pub fn do_dpll(f: Formula) {
-    let mut f0 = f.clone();
-    let r = dpll(&mut f0);
-    match cnf::write_sat_result(&f, r, &mut io::stdout()) {
+pub fn do_dpll(f: &Formula) {
+    let r = dpll(f, &vec![]);
+    match cnf::write_sat_result(f, r, &mut io::stdout()) {
         Ok(()) => (),
         Err(e) => println!("{}", e)
     }
