@@ -167,19 +167,21 @@ impl ROBDD {
 }
 
 mod tests {
-    use std::io;
+    #[test]
+    pub fn sat_test() {
+        use super::ROBDD;
+        use super::TRUE;
+        use super::FALSE;
 
-    use super::ROBDD;
-    use super::TRUE;
-    use super::FALSE;
-    use super::show_table;
-
-    pub fn table_test() {
         let mut bdd = ROBDD::new(4);
-        let x = bdd.var(0);
-        let y = bdd.var(1);
-        let z = bdd.var(2);
-        let w = bdd.var(3);
+        let xv = 0;
+        let yv = 1;
+        let zv = 2;
+        let wv = 3;
+        let x = bdd.var(xv);
+        let y = bdd.var(yv);
+        let z = bdd.var(zv);
+        let w = bdd.var(wv);
         let n1 = bdd.eq(x, TRUE);
         let n2 = bdd.eq(y, FALSE);
         let n3 = bdd.eq(z, TRUE);
@@ -188,7 +190,15 @@ mod tests {
         let n6 = bdd.and(n3, n4);
         let n7 = bdd.and(n5, n6);
         let r = bdd.anysat(n7);
-        println!("{}", r);
-        show_table(&bdd.tab, &mut io::stdout()).unwrap(); // TODO
+        match r {
+            super::SatResult::Sat(m) => {
+                assert_eq!(m.len(), 4);
+                assert_eq!(m.get(&xv), Some(&true));
+                assert_eq!(m.get(&yv), Some(&false));
+                assert_eq!(m.get(&zv), Some(&true));
+                assert_eq!(m.get(&wv), Some(&false));
+            }
+            _ => assert!(false)
+        }
     }
 }
