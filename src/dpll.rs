@@ -40,7 +40,7 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
 }
 
 fn assign(f: &Formula, l: isize) -> Formula {
-    let mut newcs = vec![];
+    let mut newcs = Vec::with_capacity(f.clauses.len());
     for c in &f.clauses {
         if c.lits.binary_search(&l).is_err() {
             let lneg = -l;
