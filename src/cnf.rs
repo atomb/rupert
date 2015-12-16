@@ -111,7 +111,7 @@ pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W)
 pub fn write_sat_result<W: Write>(f: &Formula, r: SatResult, w: &mut W)
                                   -> io::Result<()> {
     match r {
-        SatResult::Unsat => write!(w, "{}", "s UNSATISFIABLE"),
+        SatResult::Unsat => writeln!(w, "{}", "s UNSATISFIABLE"),
         SatResult::Sat(ls) => {
             try!(writeln!(w, "{}", "s SATISFIABLE"));
             try!(write!(w, "{}", 'v'));
