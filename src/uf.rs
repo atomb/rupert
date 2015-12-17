@@ -1,5 +1,3 @@
-use std::iter::repeat;
-
 // TODO: Would using SmallIntMap be better than using Vec here?
 pub struct EquivClass {
     ranks : Vec<usize>,
@@ -9,7 +7,7 @@ pub struct EquivClass {
 impl EquivClass {
     pub fn new(n : usize) -> EquivClass {
         EquivClass {
-            ranks: repeat(0).take(n).collect(),
+            ranks: vec![0; n],
             parents: (0..n).map(|i| { i }).collect()
         }
     }
@@ -46,13 +44,20 @@ impl EquivClass {
     }
 }
 
-#[test]
-fn test1() {
-    let mut ec = EquivClass::new(10);
-    ec.union(1,2);
-    ec.union(2,3);
-    println!("{}", ec.find(1));
-    println!("{}", ec.find(2));
-    println!("{}", ec.find(3));
-    println!("{}", ec.find_pure(3));
+#[cfg(test)]
+mod tests {
+    use super::EquivClass;
+
+    #[test]
+    fn test_one_class() {
+        let mut ec = EquivClass::new(4);
+        ec.union(1,2);
+        ec.union(2,3);
+        assert_eq!(ec.find(1), ec.find(2));
+        assert_eq!(ec.find(1), ec.find(3));
+        assert_eq!(ec.find(2), ec.find(3));
+        assert_eq!(ec.find(1), ec.find_pure(2));
+        assert_eq!(ec.find(1), ec.find_pure(3));
+        assert_eq!(ec.find(2), ec.find_pure(3));
+    }
 }
