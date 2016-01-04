@@ -660,6 +660,12 @@ pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
     }
 }
 
+/// Drop the hash table from a hashed AIG, consuming the original value
+/// in the process.
+pub fn drop_hash<A: AIG>(aig: HashedAIG<A>) -> A {
+    aig.aig
+}
+
 // TODO: implement Zero once it's stable
 // NB: this is only reasonable for types for which clone() is a no-op
 pub trait LitValue : Not<Output=Self> + BitAnd<Output=Self> + Copy {
