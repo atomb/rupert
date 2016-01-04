@@ -72,6 +72,18 @@ impl<A: AIG> AIGER<A> {
     }
 }
 
+/// A flexible AIG implementation. New inputs and latches can be created
+/// at any time, and their variable IDs can be interspersed with those
+/// of the gates.
+///
+/// Invariants:
+///
+///  * The `PosLit`s appearing in `inputs`, `latches`, and `ands` must
+///  be distinct.
+///
+///  * Every `Lit` in `latches`, `outputs`, and `ands` must correspond
+///  in its positive form to a literal defined in exactly one of
+///  `inputs`, `latches`, or `ands`.
 pub struct MapAIG {
     inputs: Vec<PosLit>,
     latches: Vec<Latch>,
@@ -82,13 +94,27 @@ pub struct MapAIG {
     maxlit: PosLit
 }
 
+/// A compact representation of an AIG using only vectors. Requires all
+/// inputs to come before all latches, and for both to come before all
+/// gates.
 pub struct VecAIG {
+    /// The first `inputs` variables are inputs.
     inputs: u64,
+    /// The next `latches.len()` variables are latches, with these next
+    /// literals.
     latches: Vec<Lit>,
+    /// The literals in this vector are outputs.
     outputs: Vec<Lit>,
+    /// Each literal in this vector refers to either inputs/latches or
+    /// the outputs of other gates. The entry at index `i` of this
+    /// vector corresponds to the definition of variable `i +
+    /// latches.len() + inputs`.
     ands: Vec<CompactAnd>,
 }
 
+/// An AIG with an associated hash table. The hash table keeps track of
+/// which pairs of inputs already exist, and only creates new gates when
+/// necessary.
 pub struct HashedAIG<T: AIG> {
     aig: T,
     hash: HashMap<(Lit, Lit), Var>
@@ -480,10 +506,11 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
     }
 }
 
-// This constructs a MapAIG because the ASCII AIGER file format
-// technically allows weird orderings, which MapAIG supports but VecAIG
-// does not. An alternative implementation that worked only on binary
-// AIGER files and generated a VecAIG would make sense.
+/// Parse an AIGER file, in either ASCII or binary format. This
+/// constructs a MapAIG because the ASCII AIGER file format technically
+/// allows weird orderings, which MapAIG supports but VecAIG does not.
+/// An alternative implementation that worked only on binary AIGER files
+/// and generated a VecAIG would make sense.
 pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
@@ -627,6 +654,8 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
     push_delta(rd, w)
 }
 
+/// Write an AIG to a file in AIGER format. The choice of ASCII or
+/// binary format is taken from the AIGER header.
 pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
     let b = g.body;
@@ -653,6 +682,8 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     return Ok(())
 }
 
+/// Add a hash table to an AIG, consuming the original value in the
+/// process.
 pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
     HashedAIG {
         aig: aig,
@@ -687,6 +718,12 @@ fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
     if lit_sign(l) { !val } else { val }
 }
 
+/// Evaluate an AIG on a given vector of input values. Generic over
+/// input type. For `bool`, this will do standard evaluation. For larger
+/// types, it will evaluate multiple possible inputs at once. For
+/// instance, for a vector of `u64` values, it will yield a vector of
+/// `u64` outputs, corresponding to the outputs for each set of bits in
+/// the inputs.
 pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let ni = aig.num_inputs();
     assert!(ni == ins.len());
@@ -712,6 +749,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     return outs
 }
 
+/// Copy an AIG in AIGER format from a reader to a writer.
 pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
                                         w: &mut W) -> ParseResult<()> {
     let aiger = try!(parse_aiger(r));
