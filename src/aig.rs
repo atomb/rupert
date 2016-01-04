@@ -662,7 +662,7 @@ pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
 
 // TODO: implement Zero once it's stable
 // NB: this is only reasonable for types for which clone() is a no-op
-pub trait LitValue : Clone + Not<Output=Self> + BitAnd<Output=Self> {
+pub trait LitValue : Not<Output=Self> + BitAnd<Output=Self> + Copy {
     fn zero() -> Self;
 }
 
@@ -674,10 +674,10 @@ impl LitValue for u64 {
     fn zero() -> u64 { 0 }
 }
 
-// NB: this is only reasonable for types for which clone() is a no-op
+/// Evaluate a literal given a vector of values for each variable.
 #[inline(always)]
 fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
-    let val = vals[lit_to_var(l) as usize].clone();
+    let val = vals[lit_to_var(l) as usize];
     if lit_sign(l) { !val } else { val }
 }
 
@@ -689,7 +689,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let na = aig.num_ands();
     let mut vals = Vec::with_capacity(ni + nl + na + 1);
     vals.push(LitValue::zero());
-    for  v in ins   { vals.push(v.clone()); }
+    for &v in ins   { vals.push(v); }
     for _i in 0..nl { vals.push(LitValue::zero()); }
     let mut n = ni + nl + 1;
     for (l, (r0, r1)) in aig {
