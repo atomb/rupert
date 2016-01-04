@@ -56,7 +56,20 @@ impl<A: AIG> AIGER<A> {
             comments: vec![]
         }
     }
+    pub fn add_symbol(&mut self, sym: String) {
+        self.symbols.push(sym)
+    }
+    pub fn add_comment(&mut self, cmt: String) {
+        self.comments.push(cmt)
+    }
+
     pub fn get_body(&self) -> &A { &self.body }
+    pub fn get_symbols(&self) -> &Vec<String> {
+        &self.symbols
+    }
+    pub fn get_comments(&self) -> &Vec<String> {
+        &self.comments
+    }
 }
 
 pub struct MapAIG {
