@@ -82,22 +82,19 @@ pub struct HashedAIG<T: AIG> {
 type CompactHashedAIG = HashedAIG<VecAIG>;
 type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 
+/// A generic interface to AIG structures.
 pub trait AIG {
-    //type Ands : Iterator<Item=And>;
-    //type Lits : Iterator<Item=PosLit>;
     // fn add_input(&mut self) -> PosLit
     // fn add_latch(&mut self, n: Lit) -> PosLit
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
     fn add_output(&mut self, o: Lit);
-    /*
     fn get_and(&self, l: PosLit) -> (Lit, Lit);
-    fn get_next(&self, l: PosLit) -> Lit;
+    /*
+    fn get_latch_next(&self, l: PosLit) -> Lit;
     */
-    //fn ands(&self) -> Self::Ands;
-    //fn inputs(&self) -> Self::Lits;
-    //fn latches(&self) -> Self::Lits;
-    //fn outputs(&self) -> Self::Lits;
-    fn outputs(&self) -> &Vec<Lit>;
+    fn inputs(&self) -> Vec<Lit>;
+    fn latches(&self) -> Vec<Lit>;
+    fn outputs(&self) -> Vec<Lit>;
     fn num_inputs(&self) -> usize;
     fn num_latches(&self) -> usize;
     fn num_outputs(&self) -> usize;
@@ -129,12 +126,17 @@ impl AIG for MapAIG {
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
+    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+        self.ands[&a]
+    }
     fn num_inputs(&self)  -> usize  { self.inputs.len() }
     fn num_latches(&self) -> usize  { self.latches.len() }
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxlit(&self)      -> PosLit { self.maxlit }
-    fn outputs(&self)     -> &Vec<Lit> { &self.outputs }
+    fn inputs(&self)      -> Vec<Lit> { self.inputs.clone() }
+    fn latches(&self)     -> Vec<Lit> { self.latches.iter().map(|&p| p.0).collect() }
+    fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
     /*
     fn mem_use(&self)     -> usize {
         // Extra heap data pointed to by Vecs is straightforward.
@@ -161,29 +163,39 @@ impl<A: AIG> AIG for HashedAIG<A> {
     fn add_output(&mut self, o: Lit) {
         self.aig.add_output(o)
     }
+    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+        self.aig.get_and(a)
+    }
     fn num_inputs(&self)  -> usize  { self.aig.num_inputs() }
     fn num_latches(&self) -> usize  { self.aig.num_latches() }
     fn num_outputs(&self) -> usize  { self.aig.num_outputs() }
     fn num_ands(&self)    -> usize  { self.aig.num_ands() }
     fn maxlit(&self)      -> PosLit { self.aig.maxlit() }
-    fn outputs(&self)     -> &Vec<Lit> { &self.aig.outputs() }
+    fn inputs(&self)      -> Vec<Lit> { self.aig.inputs() }
+    fn latches(&self)     -> Vec<Lit> { self.aig.latches() }
+    fn outputs(&self)     -> Vec<Lit> { self.aig.outputs() }
 }
 
 impl<A: AIG> AIG for AIGER<A> {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        // TODO: Update header
+        self.header.nands = self.header.nands + 1;
         self.body.add_and(l, r)
     }
     fn add_output(&mut self, o: Lit) {
-        // TODO: Update header
+        self.header.noutputs = self.header.noutputs + 1;
         self.body.add_output(o)
+    }
+    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+        self.body.get_and(a)
     }
     fn num_inputs(&self)  -> usize  { self.body.num_inputs() }
     fn num_latches(&self) -> usize  { self.body.num_latches() }
     fn num_outputs(&self) -> usize  { self.body.num_outputs() }
     fn num_ands(&self)    -> usize  { self.body.num_ands() }
     fn maxlit(&self)      -> PosLit { self.body.maxlit() }
-    fn outputs(&self)     -> &Vec<Lit> { &self.body.outputs() }
+    fn inputs(&self)      -> Vec<Lit> { self.body.inputs() }
+    fn latches(&self)     -> Vec<Lit> { self.body.latches() }
+    fn outputs(&self)     -> Vec<Lit> { self.body.outputs() }
 }
 
 impl VecAIG {
@@ -199,12 +211,18 @@ impl VecAIG {
 
 impl AIG for VecAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        let n = next_lit(self.ands.len() as u64);
+        let n = next_lit(var_to_lit(self.ands.len() as u64));
         self.ands.push(compact_and((n, (l, r))));
         n
     }
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
+    }
+    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+        let v = lit_to_var(a);
+        let c = self.ands[v as usize];
+        let (_, a) = expand_and(c, a);
+        a
     }
     fn num_inputs(&self)  -> usize  { self.inputs as usize }
     fn num_latches(&self) -> usize  { self.latches.len() }
@@ -213,7 +231,14 @@ impl AIG for VecAIG {
     fn maxlit(&self)      -> PosLit {
         var_to_lit(self.inputs + (self.num_latches() + self.num_ands()) as u64)
     }
-    fn outputs(&self)     -> &Vec<Lit> { &self.outputs }
+    fn inputs(&self)      -> Vec<Lit> {
+        (2..self.inputs+2).collect()
+    }
+    fn latches(&self)     -> Vec<Lit> {
+        let mi = self.inputs;
+        (mi..mi+self.latches.len() as u64).collect()
+    }
+    fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
     /*
     fn mem_use(&self)     -> usize {
         // Extra heap data pointed to by Vecs is straightforward.
@@ -609,7 +634,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     }
     let mut outs = Vec::with_capacity(no);
     for l in aig.outputs() {
-        outs.push(eval_lit(&vals, *l));
+        outs.push(eval_lit(&vals, l));
     }
     return outs
 }
