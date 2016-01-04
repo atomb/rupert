@@ -1,5 +1,6 @@
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::btree_map;
 use std::collections::HashMap;
 use std::error::Error;
 use std::io;
@@ -9,6 +10,7 @@ use std::io::Write;
 use std::ops::BitAnd;
 use std::ops::Not;
 use std::result::Result;
+use std::slice;
 
 pub enum AIGType { ASCII, Binary }
 use aig::AIGType::*;
@@ -116,6 +118,29 @@ impl MapAIG {
     }
 }
 
+/// An iterator over the gates in a `MapAIG`.
+pub struct MapAndIter<'a> {
+    inner: btree_map::Iter<'a, PosLit, (Lit, Lit)>
+}
+
+impl<'a> Iterator for MapAndIter<'a> {
+    type Item = And;
+    fn next(&mut self) -> Option<And> {
+        match self.inner.next() {
+            None => None,
+            Some((&a, &(l, r))) => Some((a, (l, r)))
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a MapAIG {
+    type Item = And;
+    type IntoIter = MapAndIter<'a>;
+    fn into_iter(self) -> MapAndIter<'a> {
+        MapAndIter { inner: self.ands.iter() }
+    }
+}
+
 impl AIG for MapAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
         let n = self.maxlit + 2;
@@ -152,6 +177,35 @@ impl AIG for MapAIG {
     }
     */
 }
+
+/// An iterator over the gates in a `VecAIG`.
+pub struct VecAndIter<'a> {
+    inner: slice::Iter<'a, CompactAnd>,
+    idx: u64
+}
+
+impl<'a> Iterator for VecAndIter<'a> {
+    type Item = And;
+    fn next(&mut self) -> Option<And> {
+        match self.inner.next() {
+            None => None,
+            Some(&args) => {
+                let a = self.idx;
+                self.idx = self.idx + 1;
+                Some(expand_and(args, a))
+            }
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a VecAIG {
+    type Item = And;
+    type IntoIter = VecAndIter<'a>;
+    fn into_iter(self) -> VecAndIter<'a> {
+        VecAndIter { inner: self.ands.iter(), idx: 0 /* TODO*/ }
+    }
+}
+
 
 impl<A: AIG> AIG for HashedAIG<A> {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
@@ -625,8 +679,8 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     for  v in ins   { vals.push(v.clone()); }
     for _i in 0..nl { vals.push(LitValue::zero()); }
     let mut n = ni + nl + 1;
-    for (l, &(r0, r1)) in &aig.ands {
-        assert!(lit_to_var(*l) == n as u64);
+    for (l, (r0, r1)) in aig {
+        assert!(lit_to_var(l) == n as u64);
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
         vals.push(r0v & r1v);
