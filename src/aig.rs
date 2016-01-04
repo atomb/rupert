@@ -682,12 +682,16 @@ pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     return Ok(())
 }
 
-/// Add a hash table to an AIG, consuming the original value in the
+/// Add a hash table to a MapAIG, consuming the original value in the
 /// process.
-pub fn hash_aig<A: AIG>(aig: A) -> HashedAIG<A> {
+pub fn hash_aig(aig: MapAIG) -> HashedAIG<MapAIG> {
+    let mut table = HashMap::new();
+    for (n, (l, r)) in &aig {
+        table.insert((l, r), n);
+    }
     HashedAIG {
         aig: aig,
-        hash: HashMap::new() // TODO: need to be able to iterate through ands
+        hash: table
     }
 }
 
