@@ -115,18 +115,28 @@ pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W)
     return Ok(())
 }
 
-pub fn write_sat_result<W: Write>(f: &Formula, r: SatResult, w: &mut W)
+pub fn write_sat_result<W: Write>(r: &SatResult, w: &mut W)
                                   -> io::Result<()> {
     match r {
-        SatResult::Unsat => writeln!(w, "{}", "s UNSATISFIABLE"),
-        SatResult::Sat(ls) => {
+        &SatResult::Unsat => writeln!(w, "{}", "s UNSATISFIABLE"),
+        &SatResult::Sat(ref ls) => {
             try!(writeln!(w, "{}", "s SATISFIABLE"));
             try!(write!(w, "{}", 'v'));
-            for l in &ls {
+            for l in ls {
                 try!(write!(w, " {}", l));
             }
             try!(writeln!(w, "{}", " 0"));
-            let good = eval_formula_on_result(f, &ls);
+            return Ok(());
+        }
+    }
+}
+
+pub fn write_sat_valid<W: Write>(f: &Formula, r: &SatResult, w: &mut W)
+                                  -> io::Result<()> {
+    match r {
+        &SatResult::Unsat => return Ok(()),
+        &SatResult::Sat(ref ls) => {
+            let good = eval_formula_on_result(f, ls);
             if !good { try!(writeln!(w, "{}", "**BAD RESULT**")); }
             return Ok(());
         }

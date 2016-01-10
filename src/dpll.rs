@@ -113,8 +113,8 @@ pub fn read_file(file: &String, buf: &mut Vec<u8>) -> io::Result<usize> {
 
 pub fn do_dpll(f: &Formula) {
     let r = dpll(f, &vec![]);
-    match cnf::write_sat_result(f, r, &mut io::stdout()) {
-        Ok(()) => (),
-        Err(e) => println!("{}", e)
-    }
+    let sr = cnf::write_sat_result(&r, &mut io::stdout());
+    sr.unwrap_or_else(|e| println!("{}", e));
+    let vr = cnf::write_sat_valid(f, &r, &mut io::stdout());
+    vr.unwrap_or_else(|e| println!("{}", e));
 }
