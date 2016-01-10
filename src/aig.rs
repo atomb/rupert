@@ -133,8 +133,8 @@ pub trait AIG {
     /*
     fn get_latch_next(&self, l: PosLit) -> Lit;
     */
-    fn inputs(&self) -> Vec<Lit>;
-    fn latches(&self) -> Vec<Lit>;
+    fn inputs(&self) -> Vec<PosLit>;
+    fn latches(&self) -> Vec<PosLit>;
     fn outputs(&self) -> Vec<Lit>;
     fn num_inputs(&self) -> usize;
     fn num_latches(&self) -> usize;
@@ -198,8 +198,8 @@ impl AIG for MapAIG {
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxlit(&self)      -> PosLit { self.maxlit }
-    fn inputs(&self)      -> Vec<Lit> { self.inputs.clone() }
-    fn latches(&self)     -> Vec<Lit> { self.latches.iter().map(|&p| p.0).collect() }
+    fn inputs(&self)      -> Vec<PosLit> { self.inputs.clone() }
+    fn latches(&self)     -> Vec<PosLit> { self.latches.iter().map(|&p| p.0).collect() }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
     /*
     fn mem_use(&self)     -> usize {
@@ -264,8 +264,8 @@ impl<A: AIG> AIG for HashedAIG<A> {
     fn num_outputs(&self) -> usize  { self.aig.num_outputs() }
     fn num_ands(&self)    -> usize  { self.aig.num_ands() }
     fn maxlit(&self)      -> PosLit { self.aig.maxlit() }
-    fn inputs(&self)      -> Vec<Lit> { self.aig.inputs() }
-    fn latches(&self)     -> Vec<Lit> { self.aig.latches() }
+    fn inputs(&self)      -> Vec<PosLit> { self.aig.inputs() }
+    fn latches(&self)     -> Vec<PosLit> { self.aig.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.aig.outputs() }
 }
 
@@ -286,8 +286,8 @@ impl<A: AIG> AIG for AIGER<A> {
     fn num_outputs(&self) -> usize  { self.body.num_outputs() }
     fn num_ands(&self)    -> usize  { self.body.num_ands() }
     fn maxlit(&self)      -> PosLit { self.body.maxlit() }
-    fn inputs(&self)      -> Vec<Lit> { self.body.inputs() }
-    fn latches(&self)     -> Vec<Lit> { self.body.latches() }
+    fn inputs(&self)      -> Vec<PosLit> { self.body.inputs() }
+    fn latches(&self)     -> Vec<PosLit> { self.body.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.body.outputs() }
 }
 
@@ -324,10 +324,10 @@ impl AIG for VecAIG {
     fn maxlit(&self)      -> PosLit {
         var_to_lit(self.inputs + (self.num_latches() + self.num_ands()) as u64)
     }
-    fn inputs(&self)      -> Vec<Lit> {
+    fn inputs(&self)      -> Vec<PosLit> {
         (2..self.inputs+2).collect()
     }
-    fn latches(&self)     -> Vec<Lit> {
+    fn latches(&self)     -> Vec<PosLit> {
         let mi = self.inputs;
         (mi..mi+self.latches.len() as u64).collect()
     }
