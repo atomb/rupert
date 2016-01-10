@@ -728,6 +728,13 @@ fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
 /// instance, for a vector of `u64` values, it will yield a vector of
 /// `u64` outputs, corresponding to the outputs for each set of bits in
 /// the inputs.
+///
+/// Invariants: all variables must be in order of constants followed by
+/// inputs followed by latches followed by gates, and the number of
+/// values in `ins` must match the number of inputs in the AIG. TODO:
+/// compare performance of this implementation to one based on a map
+/// instead of a vector. If the map is similarly fast, it will depend on
+/// fewer invariants.
 pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let ni = aig.num_inputs();
     assert!(ni == ins.len());
