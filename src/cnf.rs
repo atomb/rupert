@@ -3,8 +3,8 @@ use std::io;
 use std::io::Write;
 
 #[derive (Debug, Clone)]
+/// A sorted vector of literals.
 pub struct Clause {
-    #[doc = "Sorted vector of literals"]
     pub lits: Vec<isize>
 }
 
