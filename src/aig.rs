@@ -607,11 +607,11 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     Ok(aiger)
 }
 
-/*
-fn valid_aig(aig: AIG) -> bool {
-
+/// Check the one globally valid property of an AIG: that for every
+/// gate, the node being defined is greater than both of its children.
+pub fn valid_aig<A: IntoIterator<Item=And>>(aig: A) -> bool {
+    aig.into_iter().all(|(a, (l, r))| a > l && a > r)
 }
-*/
 
 fn write_header<W: Write>(h: &Header, w: &mut W) -> io::Result<()> {
     let typestr =
