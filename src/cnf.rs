@@ -84,7 +84,7 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
     });
     let header = ls.next().unwrap_or("p cnf 0 0");
     let w = header.split(' ').nth(3).unwrap_or("0");
-    let ncs = w.parse::<usize>().unwrap_or(0);
+    let ncs = w.trim().parse::<usize>().unwrap_or(0);
     let cs = Vec::with_capacity(ncs);
     let mut f = Formula { clauses: cs, maxvar: 0 };
     for l in ls {
