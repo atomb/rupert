@@ -656,29 +656,33 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
 
 /// Write an AIG to a file in AIGER format. The choice of ASCII or
 /// binary format is taken from the AIGER header.
-pub fn write_aiger<W: Write>(g: AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
+pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
-    let b = g.body;
+    let ref b = g.body;
     match g.header.aigtype {
-        ASCII => for i in b.inputs { try!(write_io(i, w)); },
+        ASCII => for &i in &b.inputs { try!(write_io(i, w)); },
         Binary => ()
     }
     match g.header.aigtype {
-        ASCII  => for l in b.latches { try!(write_latch_ascii(l, w)); },
-        Binary => for l in b.latches { try!(write_latch_binary(l, w)); }
+        ASCII  => for &l in &b.latches { try!(write_latch_ascii(l, w)); },
+        Binary => for &l in &b.latches { try!(write_latch_binary(l, w)); }
     }
-    for o in b.outputs {
+    for &o in &b.outputs {
         try!(write_io(o, w));
     }
     // NB: the following would need to include an explicit sorting step
     // in order to use HashMap instead of BTreeMap.
     match g.header.aigtype {
-        ASCII  => for l in b.ands { try!(write_and_ascii(l, w)); },
-        Binary => for l in b.ands { try!(write_and_binary(l, w)); }
+        ASCII  => for (&n, &(l, r)) in &b.ands {
+            try!(write_and_ascii((n, (l, r)), w));
+        },
+        Binary => for (&n, &(l, r)) in &b.ands {
+            try!(write_and_binary((n, (l, r)), w));
+        }
     }
-    for s in g.symbols      { try!(writeln!(w, "{}", s)) }
-    if g.comments.len() > 0 { try!(writeln!(w, "c"))     }
-    for s in g.comments     { try!(writeln!(w, "{}", s)) }
+    for s in &g.symbols      { try!(writeln!(w, "{}", s)) }
+    if  g.comments.len() > 0 { try!(writeln!(w, "c"))     }
+    for s in &g.comments     { try!(writeln!(w, "{}", s)) }
     return Ok(())
 }
 
@@ -764,7 +768,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
 pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
                                         w: &mut W) -> ParseResult<()> {
     let aiger = try!(parse_aiger(r));
-    match write_aiger(aiger, w) {
+    match write_aiger(&aiger, w) {
         Ok(()) => Ok(()),
         Err(e) => Err("I/O error: ".to_string() + e.description())
     }
