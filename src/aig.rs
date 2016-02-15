@@ -15,10 +15,16 @@ use std::slice;
 pub enum AIGType { ASCII, Binary }
 use aig::AIGType::*;
 
-pub type Var = u64;
-pub type Lit = u64;
-pub type PosLit = u64;
-pub type DiffLit = u32;
+#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Var(u64);
+
+#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Lit(u64);
+
+pub type PosLit = Lit;
+
+#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DiffLit(u32);
 
 pub type Latch = (PosLit, Lit);
 pub type And = (PosLit, (Lit, Lit));
@@ -26,7 +32,7 @@ pub type CompactAnd = (DiffLit, DiffLit);
 
 pub struct Header {
     aigtype: AIGType,
-    maxvar: u64,
+    maxvar: Var,
     ninputs: u64,
     nlatches: u64,
     noutputs: u64,
@@ -117,7 +123,7 @@ pub struct VecAIG {
 /// necessary.
 pub struct HashedAIG<T: AIG> {
     aig: T,
-    hash: HashMap<(Lit, Lit), Var>
+    hash: HashMap<(Lit, Lit), PosLit>
 }
 
 type CompactHashedAIG = HashedAIG<VecAIG>;
@@ -162,7 +168,7 @@ impl MapAIG {
             latches: Vec::new(),
             outputs: Vec::new(),
             ands: BTreeMap::new(),
-            maxlit: 0
+            maxlit: Lit(0) // TODO
         }
     }
 }
@@ -241,7 +247,7 @@ impl<'a> Iterator for VecAndIter<'a> {
         match self.inner.next() {
             None => None,
             Some(&args) => {
-                let a = self.idx;
+                let a = Lit(self.idx); // TODO: is this right?
                 self.idx = self.idx + 1;
                 Some(expand_and(args, a))
             }
@@ -263,7 +269,7 @@ impl<A: AIG> AIG for HashedAIG<A> {
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
         match self.hash.get(&(l1, r1)) {
-            Some(n) => *n,
+            Some(&n) => n, // TODO
             None => self.aig.add_and(l1, r1)
         }
     }
@@ -309,7 +315,7 @@ impl VecAIG {
     pub fn new(ninputs: u64, nlatches: u64) -> VecAIG {
         VecAIG {
             inputs: ninputs,
-            latches: vec![0; nlatches as usize],
+            latches: vec![Lit(0); nlatches as usize], // TODO: is this right?
             outputs: Vec::new(),
             ands: Vec::new()
         }
@@ -320,7 +326,7 @@ impl AIG for VecAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
-        let n = next_lit(var_to_lit(self.ands.len() as u64));
+        let n = next_lit(var_to_lit(Var(self.ands.len() as u64)));
         self.ands.push(compact_and((n, (l1, r1))));
         n
     }
@@ -328,7 +334,7 @@ impl AIG for VecAIG {
         self.outputs.push(o);
     }
     fn get_and(&self, a: PosLit) -> (Lit, Lit) {
-        let v = lit_to_var(a);
+        let Var(v) = lit_to_var(a);
         let c = self.ands[v as usize];
         let (_, a) = expand_and(c, a);
         a
@@ -338,14 +344,14 @@ impl AIG for VecAIG {
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxlit(&self)      -> PosLit {
-        var_to_lit(self.inputs + (self.num_latches() + self.num_ands()) as u64)
+        var_to_lit(Var(self.inputs + (self.num_latches() + self.num_ands()) as u64))
     }
     fn inputs(&self)      -> Vec<PosLit> {
-        (2..self.inputs+2).collect()
+        (2..self.inputs+2).map(|i| Lit(i)).collect()
     }
     fn latches(&self)     -> Vec<PosLit> {
         let mi = self.inputs;
-        (mi..mi+self.latches.len() as u64).collect()
+        (mi..mi+self.latches.len() as u64).map(|i| Lit(i)).collect()
     }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
     /*
@@ -361,42 +367,48 @@ impl AIG for VecAIG {
 
 pub type ParseResult<T> = Result<T, String>;
 
-pub static FALSE_LIT : Lit = 0;
-pub static TRUE_LIT  : Lit = 1;
+pub static FALSE_LIT : Lit = Lit(0);
+pub static TRUE_LIT  : Lit = Lit(1);
 #[inline(always)]
-pub fn lit_sign   (l: Lit) -> bool { l & 1 == 1 }
+pub fn lit_sign   (Lit(l): Lit) -> bool { l & 1 == 1 }
 #[inline(always)]
-pub fn lit_strip  (l: Lit) -> Lit  { l & (!1) }
+pub fn lit_strip  (Lit(l): Lit) -> Lit  { Lit(l & (!1)) }
 #[inline(always)]
-pub fn lit_not    (l: Lit) -> Lit  { l ^ 1 }
+pub fn lit_not    (Lit(l): Lit) -> Lit  { Lit(l ^ 1) }
 #[inline(always)]
-pub fn var_to_lit (v: Var) -> Lit  { v << 1 }
+pub fn var_to_lit (Var(v): Var) -> Lit  { Lit(v << 1) }
 #[inline(always)]
-pub fn lit_to_var (l: Lit) -> Var  { l >> 1 }
+pub fn lit_to_var (Lit(l): Lit) -> Var  { Var(l >> 1) }
 #[inline(always)]
-pub fn next_lit   (l: Lit) -> Lit  { l + 2  }
+pub fn next_lit   (Lit(l): Lit) -> Lit  { Lit(l + 2)  }
 
 fn compact_and(a: And) -> CompactAnd {
-    match a { (n, (l, r)) => ((n - l) as u32, (l - r) as u32) }
+    match a {
+        (Lit(n), (Lit(l), Lit(r))) =>
+            (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
+    }
 }
 
-fn expand_and(a: CompactAnd, n: PosLit) -> And {
-    match a { (ld, rd) => (n, (n - ld as u64, n - (ld + rd) as u64)) }
+fn expand_and(a: CompactAnd, Lit(n): PosLit) -> And {
+    match a {
+        (DiffLit(ld), DiffLit(rd)) =>
+            (Lit(n), (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
+    }
 }
 
 pub fn input_to_var(h: &Header, i: u64) -> Option<Var> {
-    if i < h.ninputs { Some(i + 1) } else { None }
+    if i < h.ninputs { Some(Var(i + 1)) } else { None }
 }
 
 pub fn latch_to_var(h: &Header, l: u64) -> Option<Var> {
-    if l < h.nlatches { Some(l + 1 + h.ninputs) } else { None }
+    if l < h.nlatches { Some(Var(l + 1 + h.ninputs)) } else { None }
 }
 
 pub fn and_idx_to_var(h: &Header, l: u64) -> Option<Var> {
-    if l < h.nands { Some(l + 1 + h.ninputs + h.nlatches) } else { None }
+    if l < h.nands { Some(Var(l + 1 + h.ninputs + h.nlatches)) } else { None }
 }
 
-fn push_delta<W: Write>(delta: u32, w: &mut W) -> io::Result<()> {
+fn push_delta<W: Write>(DiffLit(delta): DiffLit, w: &mut W) -> io::Result<()> {
     let mut tmp = delta;
     while (tmp & !0x7f) != 0 {
         try!(w.write_all(&[((tmp & 0x7f) | 0x80) as u8]));
@@ -405,14 +417,14 @@ fn push_delta<W: Write>(delta: u32, w: &mut W) -> io::Result<()> {
     w.write_all(&[tmp as u8])
 }
 
-fn pop_delta<R: Read>(r: &mut R) -> ParseResult<u32> {
+fn pop_delta<R: Read>(r: &mut R) -> ParseResult<DiffLit> {
     let mut x : u32 = 0;
     let mut i : u8  = 0;
     loop {
         match r.bytes().next() {
             Some(Ok(ch)) => {
                 x = x | (((ch & 0x7f) as u32) << (7 * i));
-                if ch & 0x80 == 0 { return Ok (x) }
+                if ch & 0x80 == 0 { return Ok(DiffLit(x)) }
                 i = i + 1;
             },
             Some(Err(e)) => return Err("I/O error: ".to_string() +
@@ -422,17 +434,27 @@ fn pop_delta<R: Read>(r: &mut R) -> ParseResult<u32> {
     }
 }
 
-fn parse_lit(s: &str) -> ParseResult<Lit> {
+fn parse_u64(s: &str) -> ParseResult<u64> {
     match s.trim().parse::<u64>() {
-        Err(_) => Err("Failed to parse literal: ".to_string() + s),
+        Err(_) => Err("Failed to parse value: ".to_string() + s),
         Ok(l) => Ok(l)
     }
 }
 
-fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
+fn parse_u64_error(os: Option<&str>, msg: &str) -> ParseResult<u64> {
     let s = try!(os.ok_or(msg.to_string()));
-    let l = try!(parse_lit(s));
+    let l = try!(parse_u64(s));
     return Ok(l)
+}
+
+fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
+    let l = try!(parse_u64_error(os, msg));
+    return Ok(Lit(l))
+}
+
+fn parse_var_error(os: Option<&str>, msg: &str) -> ParseResult<Var> {
+    let l = try!(parse_u64_error(os, msg));
+    return Ok(Var(l))
 }
 
 fn parse_header(l: &str) -> ParseResult<Header> {
@@ -444,11 +466,11 @@ fn parse_header(l: &str) -> ParseResult<Header> {
                                 fmt),
         None => return Err("Missing format identifier.".to_string())
     };
-    let mv = try!(parse_lit_error(ws.next(), "Missing maxvar in header"));
-    let ni = try!(parse_lit_error(ws.next(), "Missing input count in header"));
-    let nl = try!(parse_lit_error(ws.next(), "Missing latch count in header"));
-    let no = try!(parse_lit_error(ws.next(), "Missing output count in header"));
-    let na = try!(parse_lit_error(ws.next(), "Missing gate count in header"));
+    let mv = try!(parse_var_error(ws.next(), "Missing maxvar in header"));
+    let ni = try!(parse_u64_error(ws.next(), "Missing input count in header"));
+    let nl = try!(parse_u64_error(ws.next(), "Missing latch count in header"));
+    let no = try!(parse_u64_error(ws.next(), "Missing output count in header"));
+    let na = try!(parse_u64_error(ws.next(), "Missing gate count in header"));
     // Allow stray words: used for AIGER extensions
     //if ws.next().is_none() {
         let h = Header {
@@ -465,8 +487,9 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     //}
 }
 
-fn parse_io(s: &str) -> ParseResult<u64> {
-    parse_lit(s)
+fn parse_io(s: &str) -> ParseResult<Lit> {
+    let i = try!(parse_u64(s));
+    return Ok(Lit(i))
 }
 
 fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
@@ -492,11 +515,11 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
     }
 }
 
-fn parse_latch_binary(l: &str, i: u64) -> ParseResult<Latch> {
-    let ref mut ws = l.split(' ');
+fn parse_latch_binary(s: &str, l: Lit) -> ParseResult<Latch> {
+    let ref mut ws = s.split(' ');
     let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
-        return Ok((i, n))
+        return Ok((l, n))
     } else {
         return Err("Stray words on binary latch line".to_string());
     }
@@ -544,7 +567,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
                 let i = try!(parse_io(s.as_ref()));
                 is.push(i);
             },
-        Binary => for n in 0 .. ic { is.push(var_to_lit(n + 1)); }
+        Binary => for n in 0 .. ic { is.push(var_to_lit(Var(n + 1))); }
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
@@ -552,7 +575,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
                 Binary => {
-                    let l0 = var_to_lit(n + ic + 1);
+                    let l0 = var_to_lit(Var(n + ic + 1));
                     try!(parse_latch_binary(s.as_ref(), l0))
                 }
             };
@@ -563,7 +586,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         let i = try!(parse_io(s.as_ref()));
         os.push(i);
     }
-    let mut maxlit = 0;
+    let mut maxlit = Lit(0);
     match h.aigtype {
         ASCII => for _n in 0 .. ac {
             let s = try!(read_aiger_line(r));
@@ -573,7 +596,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         },
         Binary => {
             for n in 0 .. ac {
-                let lit = var_to_lit(n + ic + lc + 1);
+                let lit = var_to_lit(Var(n + ic + lc + 1));
                 let (lit2, a) = try!(parse_and_binary(lit, r));
                 gs.insert(lit2, a);
                 maxlit = cmp::max(maxlit, lit2);
@@ -636,32 +659,33 @@ fn write_header<W: Write>(h: &Header, w: &mut W) -> io::Result<()> {
             ASCII => "aag",
             Binary => "aig"
         };
+    let Var(mv) = h.maxvar;
     writeln!(w,
              "{} {} {} {} {} {}",
              typestr,
-             h.maxvar,
+             mv,
              h.ninputs,
              h.nlatches,
              h.noutputs,
              h.nands)
 }
 
-fn write_io<W: Write>(v: u64, w: &mut W) -> io::Result<()> {
-    writeln!(w, "{}", v)
+fn write_io<W: Write>(Lit(l): Lit, w: &mut W) -> io::Result<()> {
+    writeln!(w, "{}", l)
 }
 
 fn write_latch_ascii<W: Write>(l: Latch, w: &mut W) -> io::Result<()> {
-    let (i, n) = l;
+    let (Lit(i), Lit(n)) = l;
     writeln!(w, "{} {}", i, n)
 }
 
 fn write_latch_binary<W: Write>(l: Latch, w: &mut W) -> io::Result<()> {
-    let (_i, n) = l;
+    let (_i, Lit(n)) = l;
     writeln!(w, "{}", n)
 }
 
 fn write_and_ascii<W: Write>(a: And, w: &mut W) -> io::Result<()> {
-    let (i, (l, r)) = a;
+    let (Lit(i), (Lit(l), Lit(r))) = a;
     writeln!(w, "{} {} {}", i, l, r)
 }
 
@@ -739,7 +763,8 @@ impl LitValue for u64 {
 /// Evaluate a literal given a vector of values for each variable.
 #[inline(always)]
 fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
-    let val = vals[lit_to_var(l) as usize];
+    let Var(n) = lit_to_var(l);
+    let val = vals[n as usize];
     if lit_sign(l) { !val } else { val }
 }
 
@@ -768,7 +793,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     for _i in 0..nl { vals.push(LitValue::zero()); }
     let mut n = ni + nl + 1;
     for (l, (r0, r1)) in aig {
-        assert!(lit_to_var(l) == n as u64);
+        assert!(lit_to_var(l) == Var(n as u64));
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
         vals.push(r0v & r1v);
@@ -796,6 +821,8 @@ mod tests {
     extern crate quickcheck;
 
     use self::quickcheck::quickcheck;
+    use self::quickcheck::Arbitrary;
+    use self::quickcheck::Gen;
     use self::quickcheck::TestResult;
 
     use super::push_delta;
@@ -803,14 +830,20 @@ mod tests {
     use super::compact_and;
     use super::expand_and;
     use super::And;
+    use super::DiffLit;
+    use super::Lit;
+
+    impl Arbitrary for Lit {
+        fn arbitrary<G: Gen>(g: &mut G) -> Lit { Lit(g.gen()) }
+    }
 
     fn prop_push_pop(delta: u32) -> bool {
         let mut b : Vec<u8> = Vec::new();
-        match push_delta(delta, &mut b) {
+        match push_delta(DiffLit(delta), &mut b) {
             Ok(_) => {
                 let mut b2 = &b[..];
                 match pop_delta(&mut b2) {
-                    Ok(rdelta) => delta == rdelta,
+                    Ok(DiffLit(rdelta)) => delta == rdelta,
                     Err(_) => false,
                 }
             },
@@ -820,7 +853,7 @@ mod tests {
 
     fn prop_expand_compact(a: And) -> TestResult {
         match a {
-            (n, (l, r)) if n <= l || l <= r => TestResult::discard(),
+            (n, (l, r)) if n <= l || l <= r || n >= Lit(0xFFFFFFFF) => TestResult::discard(),
             _ => TestResult::from_bool(a == expand_and(compact_and(a), a.0))
         }
     }
@@ -843,8 +876,8 @@ mod tests {
 
     #[test]
     fn do_expand_compact() {
-        assert!(!prop_expand_compact((2, (1, 0))).is_failure());
-        assert!(!prop_expand_compact((4096, (1024, 1023))).is_failure());
+        assert!(!prop_expand_compact((Lit(2), (Lit(1), Lit(0)))).is_failure());
+        assert!(!prop_expand_compact((Lit(4096), (Lit(1024), Lit(1023)))).is_failure());
         quickcheck(prop_expand_compact as fn(And) -> TestResult);
     }
 }
