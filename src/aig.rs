@@ -158,7 +158,6 @@ pub trait AIG {
     fn num_ands(&self) -> usize;
     fn maxlit(&self) -> PosLit;
     //fn eval(&self, ...) -> ...;
-    //fn mem_use(&self) -> usize;
 }
 
 impl MapAIG {
@@ -219,20 +218,6 @@ impl AIG for MapAIG {
     fn inputs(&self)      -> Vec<PosLit> { self.inputs.clone() }
     fn latches(&self)     -> Vec<PosLit> { self.latches.iter().map(|&p| p.0).collect() }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
-    /*
-    fn mem_use(&self)     -> usize {
-        // Extra heap data pointed to by Vecs is straightforward.
-        let ivecsize = self.inputs.capacity() * size_of::<PosLit>();
-        let lvecsize = self.latches.capacity() * size_of::<Latch>();
-        let ovecsize = self.latches.capacity() * size_of::<Lit>();
-        let acap = self.ands.capacity();
-        // Extra heap data pointed to by HashMaps is trickier (and could change!).
-        let amapsize = acap*size_of::<u64>() +
-                       acap*size_of::<PosLit>() +
-                       acap*size_of::<(Lit, Lit)>();
-        ivecsize + lvecsize + ovecsize + amapsize + size_of::<MapAIG>()
-    }
-    */
 }
 
 /// An iterator over the gates in a `VecAIG`.
@@ -354,15 +339,6 @@ impl AIG for VecAIG {
         (mi..mi+self.latches.len() as u64).map(|i| Lit(i)).collect()
     }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
-    /*
-    fn mem_use(&self)     -> usize {
-        // Extra heap data pointed to by Vecs is straightforward.
-        let lvecsize = self.latches.capacity() * size_of::<Lit>();
-        let ovecsize = self.latches.capacity() * size_of::<Lit>();
-        let avecsize = self.ands.capacity() * size_of::<CompactAnd>();
-        lvecsize + ovecsize + avecsize + size_of::<VecAIG>()
-    }
-    */
 }
 
 pub type ParseResult<T> = Result<T, String>;
