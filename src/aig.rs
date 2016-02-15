@@ -182,8 +182,10 @@ impl<'a> IntoIterator for &'a MapAIG {
 
 impl AIG for MapAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        let n = self.maxlit + 2;
-        self.ands.insert(n, (l, r));
+        let n = next_lit(self.maxlit);
+        let l1 = cmp::max(l, r);
+        let r1 = cmp::min(l, r);
+        self.ands.insert(n, (l1, r1));
         self.maxlit = n;
         n
     }
@@ -248,9 +250,11 @@ impl<'a> IntoIterator for &'a VecAIG {
 
 impl<A: AIG> AIG for HashedAIG<A> {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        match self.hash.get(&(l, r)) {
-            Some(l) => *l,
-            None => self.aig.add_and(l, r)
+        let l1 = cmp::max(l, r);
+        let r1 = cmp::min(l, r);
+        match self.hash.get(&(l1, r1)) {
+            Some(n) => *n,
+            None => self.aig.add_and(l1, r1)
         }
     }
     fn add_output(&mut self, o: Lit) {
@@ -304,8 +308,10 @@ impl VecAIG {
 
 impl AIG for VecAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+        let l1 = cmp::max(l, r);
+        let r1 = cmp::min(l, r);
         let n = next_lit(var_to_lit(self.ands.len() as u64));
-        self.ands.push(compact_and((n, (l, r))));
+        self.ands.push(compact_and((n, (l1, r1))));
         n
     }
     fn add_output(&mut self, o: Lit) {
@@ -608,9 +614,10 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
 }
 
 /// Check the one globally valid property of an AIG: that for every
-/// gate, the node being defined is greater than both of its children.
+/// gate, the node being defined is greater than its left child, and its
+/// left child is greater than or equal to its right child.
 pub fn valid_aig<A: IntoIterator<Item=And>>(aig: A) -> bool {
-    aig.into_iter().all(|(a, (l, r))| a > l && a > r)
+    aig.into_iter().all(|(a, (l, r))| a > l && l >= r)
 }
 
 fn write_header<W: Write>(h: &Header, w: &mut W) -> io::Result<()> {
