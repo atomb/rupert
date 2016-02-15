@@ -128,6 +128,16 @@ pub trait AIG {
     // fn add_input(&mut self) -> PosLit
     // fn add_latch(&mut self, n: Lit) -> PosLit
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
+    /// l | r == ~(~l & ~r)
+    fn add_or(&mut self, l: Lit, r: Lit) -> PosLit {
+        lit_not(self.add_and(lit_not(l), lit_not(r)))
+    }
+    /// l ^ r == (l & ~r) | (~l & r)
+    fn add_xor(&mut self, l: Lit, r: Lit) -> PosLit {
+        let l1 = self.add_and(l, lit_not(r));
+        let r1 = self.add_and(lit_not(l), r);
+        self.add_or(l1, r1)
+    }
     fn add_output(&mut self, o: Lit);
     fn get_and(&self, l: PosLit) -> (Lit, Lit);
     /*
