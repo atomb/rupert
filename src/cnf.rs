@@ -41,7 +41,7 @@ impl Formula {
     }
 }
 
-fn sat_vec_to_model(m: &Vec<isize>, maxvar: usize) -> Vec<bool> {
+pub fn sat_vec_to_model(m: &Vec<isize>, maxvar: usize) -> Vec<bool> {
     let mut r = vec![false; maxvar + 1];
     for &l in m {
         r[l.abs() as usize] = l > 0;
@@ -49,15 +49,25 @@ fn sat_vec_to_model(m: &Vec<isize>, maxvar: usize) -> Vec<bool> {
     return r
 }
 
-fn eval_clause(c: &Clause, m: &Vec<bool>) -> bool {
+pub fn model_to_sat_vec(m: &Vec<bool>) -> Vec<isize> {
+    let mut i = 0;
+    let mut res = Vec::with_capacity(m.len());
+    for &b in m {
+        if b { res.push(i) } else { res.push(-i) }
+        i = i + 1;
+    }
+    res
+}
+
+pub fn eval_clause(c: &Clause, m: &Vec<bool>) -> bool {
     c.lits.iter().any(|&l| m[l.abs() as usize] == (l > 0))
 }
 
-fn eval_formula(f: &Formula, m: &Vec<bool>) -> bool {
+pub fn eval_formula(f: &Formula, m: &Vec<bool>) -> bool {
     f.clauses.iter().all(|c| eval_clause(c, m))
 }
 
-fn eval_formula_on_result(f: &Formula, r: &Vec<isize>) -> bool {
+pub fn eval_formula_on_result(f: &Formula, r: &Vec<isize>) -> bool {
     eval_formula(f, &sat_vec_to_model(r, f.maxvar))
 }
 
