@@ -233,7 +233,7 @@ impl<'a> Iterator for VecAndIter<'a> {
         match self.inner.next() {
             None => None,
             Some(&args) => {
-                let a = Lit(self.idx); // TODO: is this right?
+                let a = Lit(self.idx);
                 self.idx = self.idx + 1;
                 Some(expand_and(args, a))
             }
