@@ -134,10 +134,12 @@ type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 pub trait AIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
     /// l | r == ~(~l & ~r)
+    // TODO: this is not a positive literal!
     fn add_or(&mut self, l: Lit, r: Lit) -> PosLit {
         lit_not(self.add_and(lit_not(l), lit_not(r)))
     }
     /// l ^ r == (l & ~r) | (~l & r)
+    // TODO: this is not a positive literal!
     fn add_xor(&mut self, l: Lit, r: Lit) -> PosLit {
         let l1 = self.add_and(l, lit_not(r));
         let r1 = self.add_and(lit_not(l), r);
