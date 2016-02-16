@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
-pub type Var = usize;
-pub type NodeId = usize;
+#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Var(pub usize);
+
+#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NodeId(usize);
+
 pub type Node = (Var, NodeId, NodeId);
 pub struct ROBDD {
     tab: Vec<Node>,
@@ -11,8 +15,8 @@ pub struct ROBDD {
 pub type Op = Fn(bool, bool) -> bool;
 type AppTab = HashMap<(NodeId, NodeId), NodeId>;
 
-pub static FALSE : NodeId = 0;
-pub static TRUE : NodeId = 1;
+pub static FALSE : NodeId = NodeId(0);
+pub static TRUE : NodeId = NodeId(1);
 
 pub enum SatResult {
     Unsat,
@@ -28,7 +32,7 @@ impl fmt::Display for SatResult {
             &SatResult::Error => write!(f, "error"),
             &SatResult::Sat(ref m) => {
                 try!(write!(f, "sat"));
-                for (v, b) in m {
+                for (&Var(v), b) in m {
                     try!(write!(f, " {}:{}", v, b));
                 }
                 Ok(())
@@ -43,7 +47,7 @@ pub fn show_table<W: Write>(t: &Vec<Node>, w: &mut W) -> io::Result<()> {
     try!(writeln!(w, " Node    Var    Low   High"));
     try!(writeln!(w, "_____  _____  _____  _____"));
     let mut i = 0;
-    for &(v, l, h) in t {
+    for &(Var(v), NodeId(l), NodeId(h)) in t {
         try!(writeln!(w, "{:>5}  {:>5}  {:>5}  {:>5}", i, v, l, h));
         i = i + 1;
     }
@@ -51,8 +55,8 @@ pub fn show_table<W: Write>(t: &Vec<Node>, w: &mut W) -> io::Result<()> {
 }
 
 impl ROBDD {
-    pub fn new(vars: Var) -> ROBDD {
-        let t = vec![(vars, 1, 0), (vars, 0, 1)];
+    pub fn new(nvars: usize) -> ROBDD {
+        let t = vec![(Var(nvars), TRUE, FALSE), (Var(nvars), FALSE, TRUE)];
         ROBDD { tab: t, hash: HashMap::new() }
     }
 
@@ -64,13 +68,13 @@ impl ROBDD {
         if let Some(nid) = self.hash.get(&n) {
             return *nid;
         }
-        let nid = self.tab.len();
+        let nid = NodeId(self.tab.len());
         self.tab.push(n);
         self.hash.insert(n, nid);
         nid
     }
 
-    pub fn get(&self, u: NodeId) -> Option<&Node> {
+    pub fn get(&self, NodeId(u): NodeId) -> Option<&Node> {
         self.tab.get(u)
     }
 
@@ -79,10 +83,11 @@ impl ROBDD {
     }
 
     fn app(&mut self, g: &mut AppTab, op: &Op, u1: NodeId, u2: NodeId) -> NodeId {
-        if u1 < 2 && u2 < 2 {
-            let u = op(u1 != FALSE, u2 != FALSE) as NodeId;
-            g.insert((u1, u2), u);
-            return u;
+        if u1 <= TRUE && u2 <= TRUE {
+            let b = op(u1 != FALSE, u2 != FALSE);
+            let n = NodeId(b as usize);
+            g.insert((u1, u2), n);
+            return n;
         } else if let Some(r) = g.get(&(u1, u2)) {
             return *r;
         }
@@ -172,12 +177,13 @@ mod tests {
         use super::ROBDD;
         use super::TRUE;
         use super::FALSE;
+        use super::Var;
 
         let mut bdd = ROBDD::new(4);
-        let xv = 0;
-        let yv = 1;
-        let zv = 2;
-        let wv = 3;
+        let xv = Var(0);
+        let yv = Var(1);
+        let zv = Var(2);
+        let wv = Var(3);
         let x = bdd.var(xv);
         let y = bdd.var(yv);
         let z = bdd.var(zv);

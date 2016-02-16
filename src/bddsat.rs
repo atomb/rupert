@@ -1,4 +1,5 @@
 use bdd;
+use bdd::Var;
 use cnf;
 use cnf::Formula;
 use cnf::SatResult;
@@ -8,9 +9,9 @@ use std::io;
 
 fn bdd_sat_to_cnf_sat(m: &HashMap<bdd::Var, bool>) -> Vec<isize> {
     let mut res = Vec::new();
-    for (v, b) in m.iter() {
-        let sv = (*v + 1) as isize;
-        let i = if *b { sv } else { -sv };
+    for (&Var(v), &b) in m.iter() {
+        let sv = (v + 1) as isize;
+        let i = if b { sv } else { -sv };
         res.push(i);
     }
     res.sort_by(|a,b| a.abs().cmp(&b.abs()));
@@ -22,12 +23,12 @@ pub fn bddsat(f: &Formula) -> SatResult {
     let mut top = bdd::TRUE;
     for c in &f.clauses {
         let mut clf = bdd::FALSE;
-        for l in &c.lits {
+        for &l in &c.lits {
             let ln =
-                if *l > 0 {
-                    bdd.var(*l as usize - 1)
+                if l > 0 {
+                    bdd.var(Var(l as usize - 1))
                 } else {
-                    let n = bdd.var((-*l) as usize - 1);
+                    let n = bdd.var(Var((-l) as usize - 1));
                     bdd.not(n)
                 };
             clf = bdd.or(ln, clf)
