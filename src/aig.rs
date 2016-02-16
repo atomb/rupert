@@ -102,9 +102,10 @@ pub struct MapAIG {
 
 /// A compact representation of an AIG using only vectors. Requires all
 /// inputs to come before all latches, and for both to come before all
-/// gates.
+/// gates. The first variable, index 0, is the constant variable for
+/// TRUE and FALSE.
 pub struct VecAIG {
-    /// The first `inputs` variables are inputs.
+    /// The first `inputs` variables after 0 are inputs.
     inputs: u64,
     /// The next `latches.len()` variables are latches, with these next
     /// literals.
@@ -244,7 +245,10 @@ impl<'a> IntoIterator for &'a VecAIG {
     type Item = And;
     type IntoIter = VecAndIter<'a>;
     fn into_iter(self) -> VecAndIter<'a> {
-        VecAndIter { inner: self.ands.iter(), idx: 0 /* TODO*/ }
+        VecAndIter {
+            inner: self.ands.iter(),
+            idx: self.inputs + (self.latches.len() as u64) + 1
+        }
     }
 }
 
