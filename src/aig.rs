@@ -132,8 +132,6 @@ type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 
 /// A generic interface to AIG structures.
 pub trait AIG {
-    // fn add_input(&mut self) -> PosLit
-    // fn add_latch(&mut self, n: Lit) -> PosLit
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
     /// l | r == ~(~l & ~r)
     fn add_or(&mut self, l: Lit, r: Lit) -> PosLit {
@@ -159,6 +157,13 @@ pub trait AIG {
     fn num_ands(&self) -> usize;
     fn maxvar(&self) -> Var;
     //fn eval(&self, ...) -> ...;
+}
+
+/// AIG structures dynamic enough to allow inputs and latches to be
+/// added after initial construction.
+pub trait DynamicAIG {
+    fn add_input(&mut self) -> PosLit;
+    fn add_latch(&mut self, n: Lit) -> PosLit;
 }
 
 impl MapAIG {
