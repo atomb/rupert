@@ -51,7 +51,7 @@ impl<A: AIG> AIGER<A> {
         AIGER {
             header: Header {
                 aigtype: typ,
-                maxvar: lit_to_var(aig.maxlit()),
+                maxvar: aig.maxvar(),
                 ninputs: aig.num_inputs() as u64,
                 nlatches: aig.num_latches() as u64,
                 noutputs: aig.num_outputs() as u64,
@@ -97,7 +97,7 @@ pub struct MapAIG {
     // NB: this must be a BTreeMap to generate valid AIGER files without
     // an explicit sorting step.
     ands: BTreeMap<PosLit, (Lit, Lit)>,
-    maxlit: PosLit
+    maxvar: Var
 }
 
 /// A compact representation of an AIG using only vectors. Requires all
@@ -156,7 +156,7 @@ pub trait AIG {
     fn num_latches(&self) -> usize;
     fn num_outputs(&self) -> usize;
     fn num_ands(&self) -> usize;
-    fn maxlit(&self) -> PosLit;
+    fn maxvar(&self) -> Var;
     //fn eval(&self, ...) -> ...;
 }
 
@@ -167,7 +167,7 @@ impl MapAIG {
             latches: Vec::new(),
             outputs: Vec::new(),
             ands: BTreeMap::new(),
-            maxlit: TRUE_LIT // FALSE and TRUE always exist.
+            maxvar: Var(0) // The variable associated with TRUE and FALSE.
         }
     }
 }
@@ -197,11 +197,11 @@ impl<'a> IntoIterator for &'a MapAIG {
 
 impl AIG for MapAIG {
     fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        let n = next_lit(self.maxlit);
+        let n = var_to_lit(next_var(self.maxvar));
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
         self.ands.insert(n, (l1, r1));
-        self.maxlit = n;
+        self.maxvar = lit_to_var(n);
         n
     }
     fn add_output(&mut self, o: Lit) {
@@ -214,7 +214,7 @@ impl AIG for MapAIG {
     fn num_latches(&self) -> usize  { self.latches.len() }
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
-    fn maxlit(&self)      -> PosLit { self.maxlit }
+    fn maxvar(&self)      -> Var    { self.maxvar }
     fn inputs(&self)      -> Vec<PosLit> { self.inputs.clone() }
     fn latches(&self)     -> Vec<PosLit> { self.latches.iter().map(|&p| p.0).collect() }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
@@ -268,7 +268,7 @@ impl<A: AIG> AIG for HashedAIG<A> {
     fn num_latches(&self) -> usize  { self.aig.num_latches() }
     fn num_outputs(&self) -> usize  { self.aig.num_outputs() }
     fn num_ands(&self)    -> usize  { self.aig.num_ands() }
-    fn maxlit(&self)      -> PosLit { self.aig.maxlit() }
+    fn maxvar(&self)      -> Var    { self.aig.maxvar() }
     fn inputs(&self)      -> Vec<PosLit> { self.aig.inputs() }
     fn latches(&self)     -> Vec<PosLit> { self.aig.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.aig.outputs() }
@@ -290,7 +290,7 @@ impl<A: AIG> AIG for AIGER<A> {
     fn num_latches(&self) -> usize  { self.body.num_latches() }
     fn num_outputs(&self) -> usize  { self.body.num_outputs() }
     fn num_ands(&self)    -> usize  { self.body.num_ands() }
-    fn maxlit(&self)      -> PosLit { self.body.maxlit() }
+    fn maxvar(&self)      -> Var    { self.body.maxvar() }
     fn inputs(&self)      -> Vec<PosLit> { self.body.inputs() }
     fn latches(&self)     -> Vec<PosLit> { self.body.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.body.outputs() }
@@ -328,8 +328,8 @@ impl AIG for VecAIG {
     fn num_latches(&self) -> usize  { self.latches.len() }
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
-    fn maxlit(&self)      -> PosLit {
-        var_to_lit(Var(self.inputs + (self.num_latches() + self.num_ands()) as u64))
+    fn maxvar(&self)      -> Var    {
+        Var(self.inputs + (self.num_latches() + self.num_ands()) as u64)
     }
     fn inputs(&self)      -> Vec<PosLit> {
         (2..self.inputs+2).map(|i| Lit(i)).collect()
@@ -558,20 +558,20 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         let i = try!(parse_io(s.as_ref()));
         os.push(i);
     }
-    let mut maxlit = Lit(0);
+    let mut maxvar = Var(0);
     match h.aigtype {
         ASCII => for _n in 0 .. ac {
             let s = try!(read_aiger_line(r));
             let (nid, a) = try!(parse_and_ascii(s.as_ref()));
             gs.insert(nid, a);
-            maxlit = cmp::max(maxlit, nid);
+            maxvar = cmp::max(maxvar, lit_to_var(nid));
         },
         Binary => {
             for n in 0 .. ac {
                 let lit = var_to_lit(Var(n + ic + lc + 1));
                 let (lit2, a) = try!(parse_and_binary(lit, r));
                 gs.insert(lit2, a);
-                maxlit = cmp::max(maxlit, lit2);
+                maxvar = cmp::max(maxvar, lit_to_var(lit2));
             }
         }
     };
@@ -606,7 +606,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             outputs: os,
             latches: ls,
             ands: gs,
-            maxlit: maxlit
+            maxvar: maxvar
         };
     let aiger =
         AIGER {
