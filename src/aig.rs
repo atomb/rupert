@@ -145,7 +145,7 @@ pub trait AIG {
         self.add_or(l1, r1)
     }
     fn add_output(&mut self, o: Lit);
-    fn get_and(&self, l: PosLit) -> (Lit, Lit);
+    fn get_and_inputs(&self, l: PosLit) -> (Lit, Lit);
     /*
     fn get_latch_next(&self, l: PosLit) -> Lit;
     */
@@ -167,7 +167,7 @@ impl MapAIG {
             latches: Vec::new(),
             outputs: Vec::new(),
             ands: BTreeMap::new(),
-            maxlit: Lit(0) // TODO
+            maxlit: TRUE_LIT // FALSE and TRUE always exist.
         }
     }
 }
@@ -207,7 +207,7 @@ impl AIG for MapAIG {
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
-    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
         self.ands[&a]
     }
     fn num_inputs(&self)  -> usize  { self.inputs.len() }
@@ -261,8 +261,8 @@ impl<A: AIG> AIG for HashedAIG<A> {
     fn add_output(&mut self, o: Lit) {
         self.aig.add_output(o)
     }
-    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
-        self.aig.get_and(a)
+    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
+        self.aig.get_and_inputs(a)
     }
     fn num_inputs(&self)  -> usize  { self.aig.num_inputs() }
     fn num_latches(&self) -> usize  { self.aig.num_latches() }
@@ -283,8 +283,8 @@ impl<A: AIG> AIG for AIGER<A> {
         self.header.noutputs = self.header.noutputs + 1;
         self.body.add_output(o)
     }
-    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
-        self.body.get_and(a)
+    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
+        self.body.get_and_inputs(a)
     }
     fn num_inputs(&self)  -> usize  { self.body.num_inputs() }
     fn num_latches(&self) -> usize  { self.body.num_latches() }
@@ -318,7 +318,7 @@ impl AIG for VecAIG {
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
-    fn get_and(&self, a: PosLit) -> (Lit, Lit) {
+    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
         let Var(v) = lit_to_var(a);
         let c = self.ands[v as usize];
         let (_, a) = expand_and(c, a);
@@ -346,7 +346,7 @@ pub type ParseResult<T> = Result<T, String>;
 pub static FALSE_LIT : Lit = Lit(0);
 pub static TRUE_LIT  : Lit = Lit(1);
 #[inline(always)]
-pub fn lit_sign   (Lit(l): Lit) -> bool { l & 1 == 1 }
+pub fn lit_inverted (Lit(l): Lit) -> bool { l & 1 == 1 }
 #[inline(always)]
 pub fn lit_strip  (Lit(l): Lit) -> Lit  { Lit(l & (!1)) }
 #[inline(always)]
@@ -357,19 +357,15 @@ pub fn var_to_lit (Var(v): Var) -> Lit  { Lit(v << 1) }
 pub fn lit_to_var (Lit(l): Lit) -> Var  { Var(l >> 1) }
 #[inline(always)]
 pub fn next_lit   (Lit(l): Lit) -> Lit  { Lit(l + 2)  }
+#[inline(always)]
+pub fn next_var   (Var(v): Var) -> Var  { Var(v + 1)  }
 
-fn compact_and(a: And) -> CompactAnd {
-    match a {
-        (Lit(n), (Lit(l), Lit(r))) =>
-            (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
-    }
+fn compact_and((Lit(n), (Lit(l), Lit(r))): And) -> CompactAnd {
+    (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
 }
 
-fn expand_and(a: CompactAnd, Lit(n): PosLit) -> And {
-    match a {
-        (DiffLit(ld), DiffLit(rd)) =>
-            (Lit(n), (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
-    }
+fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, Lit(n): PosLit) -> And {
+    (Lit(n), (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
 }
 
 pub fn input_to_var(h: &Header, i: u64) -> Option<Var> {
@@ -741,7 +737,7 @@ impl LitValue for u64 {
 fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
     let Var(n) = lit_to_var(l);
     let val = vals[n as usize];
-    if lit_sign(l) { !val } else { val }
+    if lit_inverted(l) { !val } else { val }
 }
 
 /// Evaluate an AIG on a given vector of input values. Generic over
@@ -782,7 +778,8 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     return outs
 }
 
-/// Copy an AIG in AIGER format from a reader to a writer.
+/// Copy an AIG in AIGER format from a reader to a writer, preserving
+/// the type.
 pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
                                         w: &mut W) -> ParseResult<()> {
     let aiger = try!(parse_aiger(r));
