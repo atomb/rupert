@@ -21,13 +21,11 @@ pub struct Var(u64);
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Lit(u64);
 
-pub type PosLit = Lit;
-
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DiffLit(u32);
 
-pub type Latch = (PosLit, Lit);
-pub type And = (PosLit, (Lit, Lit));
+pub type Latch = (Var, Lit);
+pub type And = (Var, (Lit, Lit));
 pub type CompactAnd = (DiffLit, DiffLit);
 
 pub struct Header {
@@ -84,19 +82,18 @@ impl<A: AIG> AIGER<A> {
 ///
 /// Invariants:
 ///
-///  * The `PosLit`s appearing in `inputs`, `latches`, and `ands` must
-///  be distinct.
+///  * The `Vars`s appearing in `inputs`, `latches`, and `ands` must be
+///  distinct.
 ///
-///  * Every `Lit` in `latches`, `outputs`, and `ands` must correspond
-///  in its positive form to a literal defined in exactly one of
-///  `inputs`, `latches`, or `ands`.
+///  * Every `Lit` in `latches`, `outputs`, and `ands` must refer to a
+///  variable defined in exactly one of `inputs`, `latches`, or `ands`.
 pub struct MapAIG {
-    inputs: Vec<PosLit>,
+    inputs: Vec<Var>,
     latches: Vec<Latch>,
     outputs: Vec<Lit>,
     // NB: this must be a BTreeMap to generate valid AIGER files without
     // an explicit sorting step.
-    ands: BTreeMap<PosLit, (Lit, Lit)>,
+    ands: BTreeMap<Var, (Lit, Lit)>,
     maxvar: Var
 }
 
@@ -124,7 +121,7 @@ pub struct VecAIG {
 /// necessary.
 pub struct HashedAIG<T: AIG> {
     aig: T,
-    hash: HashMap<(Lit, Lit), PosLit>
+    hash: HashMap<(Lit, Lit), Var>
 }
 
 type CompactHashedAIG = HashedAIG<VecAIG>;
@@ -132,26 +129,28 @@ type CompactHashedAIGER = AIGER<CompactHashedAIG>;
 
 /// A generic interface to AIG structures.
 pub trait AIG {
-    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit;
+    /// Add an AND gate with the given literals as inputs. Always
+    /// constructs a new variable which can be used positively, but
+    /// returns a literal for symmetry with the other logical
+    /// operations.
+    fn add_and(&mut self, l: Lit, r: Lit) -> Lit;
     /// l | r == ~(~l & ~r)
-    // TODO: this is not a positive literal!
-    fn add_or(&mut self, l: Lit, r: Lit) -> PosLit {
+    fn add_or(&mut self, l: Lit, r: Lit) -> Lit {
         lit_not(self.add_and(lit_not(l), lit_not(r)))
     }
     /// l ^ r == (l & ~r) | (~l & r)
-    // TODO: this is not a positive literal!
-    fn add_xor(&mut self, l: Lit, r: Lit) -> PosLit {
+    fn add_xor(&mut self, l: Lit, r: Lit) -> Lit {
         let l1 = self.add_and(l, lit_not(r));
         let r1 = self.add_and(lit_not(l), r);
         self.add_or(l1, r1)
     }
     fn add_output(&mut self, o: Lit);
-    fn get_and_inputs(&self, l: PosLit) -> (Lit, Lit);
+    fn get_and_inputs(&self, v: &Var) -> (Lit, Lit);
     /*
-    fn get_latch_next(&self, l: PosLit) -> Lit;
+    fn get_latch_next(&self, l: Var) -> Lit;
     */
-    fn inputs(&self) -> Vec<PosLit>;
-    fn latches(&self) -> Vec<PosLit>;
+    fn inputs(&self) -> Vec<Var>;
+    fn latches(&self) -> Vec<Var>;
     fn outputs(&self) -> Vec<Lit>;
     fn num_inputs(&self) -> usize;
     fn num_latches(&self) -> usize;
@@ -164,8 +163,8 @@ pub trait AIG {
 /// AIG structures dynamic enough to allow inputs and latches to be
 /// added after initial construction.
 pub trait DynamicAIG {
-    fn add_input(&mut self) -> PosLit;
-    fn add_latch(&mut self, n: Lit) -> PosLit;
+    fn add_input(&mut self) -> Var;
+    fn add_latch(&mut self, n: Lit) -> Var;
 }
 
 impl MapAIG {
@@ -182,7 +181,7 @@ impl MapAIG {
 
 /// An iterator over the gates in a `MapAIG`.
 pub struct MapAndIter<'a> {
-    inner: btree_map::Iter<'a, PosLit, (Lit, Lit)>
+    inner: btree_map::Iter<'a, Var, (Lit, Lit)>
 }
 
 impl<'a> Iterator for MapAndIter<'a> {
@@ -204,27 +203,27 @@ impl<'a> IntoIterator for &'a MapAIG {
 }
 
 impl AIG for MapAIG {
-    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
-        let n = var_to_lit(next_var(self.maxvar));
+    fn add_and(&mut self, l: Lit, r: Lit) -> Lit {
+        let v = next_var(self.maxvar);
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
-        self.ands.insert(n, (l1, r1));
-        self.maxvar = lit_to_var(n);
-        n
+        self.ands.insert(v, (l1, r1));
+        self.maxvar = v;
+        var_to_lit(v)
     }
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
-    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
-        self.ands[&a]
+    fn get_and_inputs(&self, v: &Var) -> (Lit, Lit) {
+        self.ands[v]
     }
     fn num_inputs(&self)  -> usize  { self.inputs.len() }
     fn num_latches(&self) -> usize  { self.latches.len() }
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxvar(&self)      -> Var    { self.maxvar }
-    fn inputs(&self)      -> Vec<PosLit> { self.inputs.clone() }
-    fn latches(&self)     -> Vec<PosLit> { self.latches.iter().map(|&p| p.0).collect() }
+    fn inputs(&self)      -> Vec<Var> { self.inputs.clone() }
+    fn latches(&self)     -> Vec<Var> { self.latches.iter().map(|&p| p.0).collect() }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
 }
 
@@ -240,9 +239,9 @@ impl<'a> Iterator for VecAndIter<'a> {
         match self.inner.next() {
             None => None,
             Some(&args) => {
-                let a = Lit(self.idx);
+                let v = Var(self.idx);
                 self.idx = self.idx + 1;
-                Some(expand_and(args, a))
+                Some(expand_and(args, v))
             }
         }
     }
@@ -261,32 +260,32 @@ impl<'a> IntoIterator for &'a VecAIG {
 
 
 impl<A: AIG> AIG for HashedAIG<A> {
-    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+    fn add_and(&mut self, l: Lit, r: Lit) -> Lit {
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
         match self.hash.get(&(l1, r1)) {
-            Some(&n) => n, // TODO
+            Some(&v) => var_to_lit(v),
             None => self.aig.add_and(l1, r1)
         }
     }
     fn add_output(&mut self, o: Lit) {
         self.aig.add_output(o)
     }
-    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
-        self.aig.get_and_inputs(a)
+    fn get_and_inputs(&self, v: &Var) -> (Lit, Lit) {
+        self.aig.get_and_inputs(v)
     }
     fn num_inputs(&self)  -> usize  { self.aig.num_inputs() }
     fn num_latches(&self) -> usize  { self.aig.num_latches() }
     fn num_outputs(&self) -> usize  { self.aig.num_outputs() }
     fn num_ands(&self)    -> usize  { self.aig.num_ands() }
     fn maxvar(&self)      -> Var    { self.aig.maxvar() }
-    fn inputs(&self)      -> Vec<PosLit> { self.aig.inputs() }
-    fn latches(&self)     -> Vec<PosLit> { self.aig.latches() }
+    fn inputs(&self)      -> Vec<Var> { self.aig.inputs() }
+    fn latches(&self)     -> Vec<Var> { self.aig.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.aig.outputs() }
 }
 
 impl<A: AIG> AIG for AIGER<A> {
-    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+    fn add_and(&mut self, l: Lit, r: Lit) -> Lit {
         self.header.nands = self.header.nands + 1;
         self.body.add_and(l, r)
     }
@@ -294,16 +293,16 @@ impl<A: AIG> AIG for AIGER<A> {
         self.header.noutputs = self.header.noutputs + 1;
         self.body.add_output(o)
     }
-    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
-        self.body.get_and_inputs(a)
+    fn get_and_inputs(&self, v: &Var) -> (Lit, Lit) {
+        self.body.get_and_inputs(v)
     }
     fn num_inputs(&self)  -> usize  { self.body.num_inputs() }
     fn num_latches(&self) -> usize  { self.body.num_latches() }
     fn num_outputs(&self) -> usize  { self.body.num_outputs() }
     fn num_ands(&self)    -> usize  { self.body.num_ands() }
     fn maxvar(&self)      -> Var    { self.body.maxvar() }
-    fn inputs(&self)      -> Vec<PosLit> { self.body.inputs() }
-    fn latches(&self)     -> Vec<PosLit> { self.body.latches() }
+    fn inputs(&self)      -> Vec<Var> { self.body.inputs() }
+    fn latches(&self)     -> Vec<Var> { self.body.latches() }
     fn outputs(&self)     -> Vec<Lit> { self.body.outputs() }
 }
 
@@ -311,7 +310,8 @@ impl VecAIG {
     pub fn new(ninputs: u64, nlatches: u64) -> VecAIG {
         VecAIG {
             inputs: ninputs,
-            latches: vec![Lit(0); nlatches as usize], // TODO: is this right?
+            // By default, the next value of all latches is FALSE.
+            latches: vec![Lit(0); nlatches as usize],
             outputs: Vec::new(),
             ands: Vec::new()
         }
@@ -319,20 +319,19 @@ impl VecAIG {
 }
 
 impl AIG for VecAIG {
-    fn add_and(&mut self, l: Lit, r: Lit) -> PosLit {
+    fn add_and(&mut self, l: Lit, r: Lit) -> Lit {
         let l1 = cmp::max(l, r);
         let r1 = cmp::min(l, r);
-        let n = next_lit(var_to_lit(Var(self.ands.len() as u64)));
-        self.ands.push(compact_and((n, (l1, r1))));
-        n
+        let v = next_var(Var(self.ands.len() as u64));
+        self.ands.push(compact_and((v, (l1, r1))));
+        var_to_lit(v)
     }
     fn add_output(&mut self, o: Lit) {
         self.outputs.push(o);
     }
-    fn get_and_inputs(&self, a: PosLit) -> (Lit, Lit) {
-        let Var(v) = lit_to_var(a);
+    fn get_and_inputs(&self, &Var(v): &Var) -> (Lit, Lit) {
         let c = self.ands[v as usize];
-        let (_, a) = expand_and(c, a);
+        let (_, a) = expand_and(c, Var(v));
         a
     }
     fn num_inputs(&self)  -> usize  { self.inputs as usize }
@@ -342,12 +341,12 @@ impl AIG for VecAIG {
     fn maxvar(&self)      -> Var    {
         Var(self.inputs + (self.num_latches() + self.num_ands()) as u64)
     }
-    fn inputs(&self)      -> Vec<PosLit> {
-        (2..self.inputs+2).map(|i| Lit(i)).collect()
+    fn inputs(&self)      -> Vec<Var> {
+        (1..self.inputs+1).map(|i| Var(i)).collect()
     }
-    fn latches(&self)     -> Vec<PosLit> {
-        let mi = self.inputs;
-        (mi..mi+self.latches.len() as u64).map(|i| Lit(i)).collect()
+    fn latches(&self)     -> Vec<Var> {
+        let mi = self.inputs + 1;
+        (mi..mi+self.latches.len() as u64).map(|i| Var(i)).collect()
     }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
 }
@@ -371,12 +370,14 @@ pub fn next_lit   (Lit(l): Lit) -> Lit  { Lit(l + 2)  }
 #[inline(always)]
 pub fn next_var   (Var(v): Var) -> Var  { Var(v + 1)  }
 
-fn compact_and((Lit(n), (Lit(l), Lit(r))): And) -> CompactAnd {
+fn compact_and((v, (Lit(l), Lit(r))): And) -> CompactAnd {
+    let Lit(n) = var_to_lit(v);
     (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
 }
 
-fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, Lit(n): PosLit) -> And {
-    (Lit(n), (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
+fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, v: Var) -> And {
+    let Lit(n) = var_to_lit(v);
+    (v, (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
 }
 
 pub fn input_to_var(h: &Header, i: u64) -> Option<Var> {
@@ -435,11 +436,6 @@ fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
     return Ok(Lit(l))
 }
 
-fn parse_var_error(os: Option<&str>, msg: &str) -> ParseResult<Var> {
-    let l = try!(parse_u64_error(os, msg));
-    return Ok(Var(l))
-}
-
 fn parse_header(l: &str) -> ParseResult<Header> {
     let ref mut ws = l.split(' ');
     let ty = match ws.next() {
@@ -449,7 +445,7 @@ fn parse_header(l: &str) -> ParseResult<Header> {
                                 fmt),
         None => return Err("Missing format identifier.".to_string())
     };
-    let mv = try!(parse_var_error(ws.next(), "Missing maxvar in header"));
+    let mv = try!(parse_u64_error(ws.next(), "Missing maxvar in header"));
     let ni = try!(parse_u64_error(ws.next(), "Missing input count in header"));
     let nl = try!(parse_u64_error(ws.next(), "Missing latch count in header"));
     let no = try!(parse_u64_error(ws.next(), "Missing output count in header"));
@@ -458,7 +454,7 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     //if ws.next().is_none() {
         let h = Header {
             aigtype: ty,
-            maxvar: mv,
+            maxvar: Var(mv),
             ninputs: ni,
             nlatches: nl,
             noutputs: no,
@@ -470,17 +466,22 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     //}
 }
 
-fn parse_io(s: &str) -> ParseResult<Lit> {
+fn parse_input(s: &str) -> ParseResult<Var> {
+    let i = try!(parse_u64(s));
+    return Ok(lit_to_var(Lit(i)))
+}
+
+fn parse_output(s: &str) -> ParseResult<Lit> {
     let i = try!(parse_u64(s));
     return Ok(Lit(i))
 }
 
 fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
     let ref mut ws = l.split(' ');
-    let i = try!(parse_lit_error(ws.next(), "Missing latch ID"));
+    let l = try!(parse_lit_error(ws.next(), "Missing latch ID"));
     let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
-        return Ok((i, n))
+        return Ok((lit_to_var(l), n))
     } else {
         return Err("Stray words on ASCII latch line".to_string());
     }
@@ -492,17 +493,17 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
     let l = try!(parse_lit_error(ws.next(), "Missing AND left"));
     let r = try!(parse_lit_error(ws.next(), "Missing AND right"));
     if ws.next().is_none() {
-        return Ok((n, (l, r)))
+        return Ok((lit_to_var(n), (l, r)))
     } else {
         return Err("Stray words on ASCII and line".to_string());
     }
 }
 
-fn parse_latch_binary(s: &str, l: Lit) -> ParseResult<Latch> {
+fn parse_latch_binary(s: &str, v: Var) -> ParseResult<Latch> {
     let ref mut ws = s.split(' ');
     let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
-        return Ok((l, n))
+        return Ok((v, n))
     } else {
         return Err("Stray words on binary latch line".to_string());
     }
@@ -514,9 +515,9 @@ fn parse_cand_binary<R: Read>(r: &mut R) -> ParseResult<CompactAnd> {
     Ok((ld, rd))
 }
 
-fn parse_and_binary<R: Read>(n: PosLit, r: &mut R) -> ParseResult<And> {
+fn parse_and_binary<R: Read>(v: Var, r: &mut R) -> ParseResult<And> {
     let a = try!(parse_cand_binary(r));
-    Ok(expand_and(a, n))
+    Ok(expand_and(a, v))
 }
 
 fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
@@ -547,10 +548,10 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         ASCII =>
             for _n in 0 .. ic {
                 let s = try!(read_aiger_line(r));
-                let i = try!(parse_io(s.as_ref()));
+                let i = try!(parse_input(s.as_ref()));
                 is.push(i);
             },
-        Binary => for n in 0 .. ic { is.push(var_to_lit(Var(n + 1))); }
+        Binary => for n in 0 .. ic { is.push(Var(n + 1)); }
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
@@ -558,31 +559,31 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
                 Binary => {
-                    let l0 = var_to_lit(Var(n + ic + 1));
-                    try!(parse_latch_binary(s.as_ref(), l0))
+                    let v0 = Var(n + ic + 1);
+                    try!(parse_latch_binary(s.as_ref(), v0))
                 }
             };
         ls.push(l);
     }
     for _n in 0 .. h.noutputs {
         let s = try!(read_aiger_line(r));
-        let i = try!(parse_io(s.as_ref()));
+        let i = try!(parse_output(s.as_ref()));
         os.push(i);
     }
     let mut maxvar = Var(0);
     match h.aigtype {
         ASCII => for _n in 0 .. ac {
             let s = try!(read_aiger_line(r));
-            let (nid, a) = try!(parse_and_ascii(s.as_ref()));
-            gs.insert(nid, a);
-            maxvar = cmp::max(maxvar, lit_to_var(nid));
+            let (v, a) = try!(parse_and_ascii(s.as_ref()));
+            gs.insert(v, a);
+            maxvar = cmp::max(maxvar, v);
         },
         Binary => {
             for n in 0 .. ac {
-                let lit = var_to_lit(Var(n + ic + lc + 1));
-                let (lit2, a) = try!(parse_and_binary(lit, r));
-                gs.insert(lit2, a);
-                maxvar = cmp::max(maxvar, lit_to_var(lit2));
+                let v = Var(n + ic + lc + 1);
+                let (v2, a) = try!(parse_and_binary(v, r));
+                gs.insert(v2, a);
+                maxvar = cmp::max(maxvar, v2);
             }
         }
     };
@@ -633,7 +634,11 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
 /// gate, the node being defined is greater than its left child, and its
 /// left child is greater than or equal to its right child.
 pub fn valid_aig<A: IntoIterator<Item=And>>(aig: A) -> bool {
-    aig.into_iter().all(|(a, (l, r))| a > l && l >= r)
+    aig.into_iter().all(valid_and)
+}
+
+pub fn valid_and((v, (l, r)): And) -> bool {
+    var_to_lit(v) > l && l >= r
 }
 
 fn write_header<W: Write>(h: &Header, w: &mut W) -> io::Result<()> {
@@ -653,22 +658,27 @@ fn write_header<W: Write>(h: &Header, w: &mut W) -> io::Result<()> {
              h.nands)
 }
 
-fn write_io<W: Write>(Lit(l): Lit, w: &mut W) -> io::Result<()> {
+fn write_input<W: Write>(v: Var, w: &mut W) -> io::Result<()> {
+    let Lit(l) = var_to_lit(v);
     writeln!(w, "{}", l)
 }
 
-fn write_latch_ascii<W: Write>(l: Latch, w: &mut W) -> io::Result<()> {
-    let (Lit(i), Lit(n)) = l;
-    writeln!(w, "{} {}", i, n)
+fn write_output<W: Write>(Lit(l): Lit, w: &mut W) -> io::Result<()> {
+    writeln!(w, "{}", l)
 }
 
-fn write_latch_binary<W: Write>(l: Latch, w: &mut W) -> io::Result<()> {
-    let (_i, Lit(n)) = l;
+fn write_latch_ascii<W: Write>((v, Lit(n)): Latch, w: &mut W) -> io::Result<()> {
+    let Lit(l) = var_to_lit(v);
+    writeln!(w, "{} {}", l, n)
+}
+
+fn write_latch_binary<W: Write>((_, Lit(n)): Latch, w: &mut W) -> io::Result<()> {
     writeln!(w, "{}", n)
 }
 
 fn write_and_ascii<W: Write>(a: And, w: &mut W) -> io::Result<()> {
-    let (Lit(i), (Lit(l), Lit(r))) = a;
+    let (v, (Lit(l), Lit(r))) = a;
+    let Lit(i) = var_to_lit(v);
     writeln!(w, "{} {} {}", i, l, r)
 }
 
@@ -684,7 +694,7 @@ pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
     let ref b = g.body;
     match g.header.aigtype {
-        ASCII => for &i in &b.inputs { try!(write_io(i, w)); },
+        ASCII => for &i in &b.inputs { try!(write_input(i, w)); },
         Binary => ()
     }
     match g.header.aigtype {
@@ -692,7 +702,7 @@ pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
         Binary => for &l in &b.latches { try!(write_latch_binary(l, w)); }
     }
     for &o in &b.outputs {
-        try!(write_io(o, w));
+        try!(write_output(o, w));
     }
     // NB: the following would need to include an explicit sorting step
     // in order to use HashMap instead of BTreeMap.
@@ -770,13 +780,14 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     let nl = aig.num_latches();
     let no = aig.num_outputs();
     let na = aig.num_ands();
+    //let mut vals = vec![LitValue::zero(); ni + nl + na + 1];
     let mut vals = Vec::with_capacity(ni + nl + na + 1);
     vals.push(LitValue::zero());
     for &v in ins   { vals.push(v); }
     for _i in 0..nl { vals.push(LitValue::zero()); }
     let mut n = ni + nl + 1;
-    for (l, (r0, r1)) in aig {
-        assert!(lit_to_var(l) == Var(n as u64));
+    for (v, (r0, r1)) in aig {
+        assert!(v == Var(n as u64));
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
         vals.push(r0v & r1v);
@@ -813,12 +824,18 @@ mod tests {
     use super::pop_delta;
     use super::compact_and;
     use super::expand_and;
+    use super::valid_and;
     use super::And;
     use super::DiffLit;
     use super::Lit;
+    use super::Var;
 
     impl Arbitrary for Lit {
         fn arbitrary<G: Gen>(g: &mut G) -> Lit { Lit(g.gen()) }
+    }
+
+    impl Arbitrary for Var {
+        fn arbitrary<G: Gen>(g: &mut G) -> Var { Var(g.gen()) }
     }
 
     fn prop_push_pop(delta: u32) -> bool {
@@ -837,7 +854,7 @@ mod tests {
 
     fn prop_expand_compact(a: And) -> TestResult {
         match a {
-            (n, (l, r)) if n <= l || l <= r || n >= Lit(0xFFFFFFFF) => TestResult::discard(),
+            (v, (_, _)) if !valid_and(a) || v > Var(0xFFFFFFFF) => TestResult::discard(),
             _ => TestResult::from_bool(a == expand_and(compact_and(a), a.0))
         }
     }
@@ -860,8 +877,9 @@ mod tests {
 
     #[test]
     fn do_expand_compact() {
-        assert!(!prop_expand_compact((Lit(2), (Lit(1), Lit(0)))).is_failure());
-        assert!(!prop_expand_compact((Lit(4096), (Lit(1024), Lit(1023)))).is_failure());
+        assert!(!prop_expand_compact((Var(2), (Lit(1), Lit(0)))).is_failure());
+        assert!(!prop_expand_compact((Var(5), (Lit(3), Lit(2)))).is_failure());
+        assert!(!prop_expand_compact((Var(4096), (Lit(1024), Lit(1023)))).is_failure());
         quickcheck(prop_expand_compact as fn(And) -> TestResult);
     }
 }
