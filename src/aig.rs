@@ -355,6 +355,7 @@ pub type ParseResult<T> = Result<T, String>;
 
 pub static FALSE_LIT : Lit = Lit(0);
 pub static TRUE_LIT  : Lit = Lit(1);
+pub static MAX_VAR : Var = Var(!0 >> 1);
 #[inline(always)]
 pub fn lit_inverted (Lit(l): Lit) -> bool { l & 1 == 1 }
 #[inline(always)]
@@ -808,11 +809,15 @@ mod tests {
     use self::quickcheck::Gen;
     use self::quickcheck::TestResult;
 
+    use super::MAX_VAR;
     use super::push_delta;
     use super::pop_delta;
     use super::compact_and;
     use super::expand_and;
     use super::valid_and;
+    use super::lit_to_var;
+    use super::var_to_lit;
+    use super::lit_strip;
     use super::And;
     use super::DiffLit;
     use super::Lit;
@@ -847,6 +852,14 @@ mod tests {
         }
     }
 
+    fn prop_lit_var(l: Lit) -> TestResult {
+        TestResult::from_bool(lit_strip(l) == var_to_lit(lit_to_var(l)))
+    }
+
+    fn prop_var_lit(v: Var) -> TestResult {
+        TestResult::from_bool(v == lit_to_var(var_to_lit(v)) || v >= MAX_VAR)
+    }
+
     #[test]
     fn do_push_pop() {
         assert!(prop_push_pop(0));
@@ -869,5 +882,11 @@ mod tests {
         assert!(!prop_expand_compact((Var(5), (Lit(3), Lit(2)))).is_failure());
         assert!(!prop_expand_compact((Var(4096), (Lit(1024), Lit(1023)))).is_failure());
         quickcheck(prop_expand_compact as fn(And) -> TestResult);
+    }
+
+    #[test]
+    fn do_lits() {
+        quickcheck(prop_var_lit as fn(Var) -> TestResult);
+        quickcheck(prop_lit_var as fn(Lit) -> TestResult);
     }
 }
