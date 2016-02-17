@@ -21,6 +21,7 @@ pub struct Var(u64);
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Lit(u64);
 
+/// Note: this assumes we never have more than 32 bits of difference!
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DiffLit(u32);
 
@@ -373,6 +374,8 @@ pub fn next_var   (Var(v): Var) -> Var  { Var(v + 1)  }
 
 fn compact_and((v, (Lit(l), Lit(r))): And) -> CompactAnd {
     let Lit(n) = var_to_lit(v);
+    assert!(n - l <= 0xFFFFFFFF);
+    assert!(l - r <= 0xFFFFFFFF);
     (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
 }
 
@@ -843,6 +846,7 @@ mod tests {
         }
     }
 
+    /// Note: this is only true for small variables!
     fn prop_expand_compact(a: And) -> TestResult {
         match a {
             (v, (_, _)) if !valid_and(a) || v > Var(0xFFFFFFFF) => TestResult::discard(),
