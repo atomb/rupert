@@ -228,6 +228,21 @@ impl AIG for MapAIG {
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
 }
 
+impl DynamicAIG for MapAIG {
+    fn add_input(&mut self) -> Var {
+        let v = next_var(self.maxvar);
+        self.maxvar = v;
+        self.inputs.push(v);
+        v
+    }
+    fn add_latch(&mut self, n: Lit) -> Var {
+        let v = next_var(self.maxvar);
+        self.maxvar = v;
+        self.latches.push((v, n));
+        v
+    }
+}
+
 /// An iterator over the gates in a `VecAIG`.
 pub struct VecAndIter<'a> {
     inner: slice::Iter<'a, CompactAnd>,
