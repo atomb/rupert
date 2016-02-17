@@ -380,18 +380,6 @@ fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, v: Var) -> And {
     (v, (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
 }
 
-pub fn input_to_var(h: &Header, i: u64) -> Option<Var> {
-    if i < h.ninputs { Some(Var(i + 1)) } else { None }
-}
-
-pub fn latch_to_var(h: &Header, l: u64) -> Option<Var> {
-    if l < h.nlatches { Some(Var(l + 1 + h.ninputs)) } else { None }
-}
-
-pub fn and_idx_to_var(h: &Header, l: u64) -> Option<Var> {
-    if l < h.nands { Some(Var(l + 1 + h.ninputs + h.nlatches)) } else { None }
-}
-
 fn push_delta<W: Write>(DiffLit(delta): DiffLit, w: &mut W) -> io::Result<()> {
     let mut tmp = delta;
     while (tmp & !0x7f) != 0 {
