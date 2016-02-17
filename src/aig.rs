@@ -439,20 +439,18 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     let nl = try!(parse_u64_error(ws.next(), "Missing latch count in header"));
     let no = try!(parse_u64_error(ws.next(), "Missing output count in header"));
     let na = try!(parse_u64_error(ws.next(), "Missing gate count in header"));
-    // Allow stray words: used for AIGER extensions
-    //if ws.next().is_none() {
-        let h = Header {
-            aigtype: ty,
-            maxvar: Var(mv),
-            ninputs: ni,
-            nlatches: nl,
-            noutputs: no,
-            nands: na
-        };
-        return Ok(h)
-    //} else {
-    //    return Err("Stray words on header line".to_string());
-    //}
+    let h = Header {
+        aigtype: ty,
+        maxvar: Var(mv),
+        ninputs: ni,
+        nlatches: nl,
+        noutputs: no,
+        nands: na
+    };
+    if h.maxvar > MAX_VAR {
+        return Err("File has too many variables".to_string());
+    }
+    return Ok(h)
 }
 
 fn parse_input(s: &str) -> ParseResult<Var> {
