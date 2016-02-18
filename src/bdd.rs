@@ -15,8 +15,8 @@ pub struct ROBDD {
 pub type Op = Fn(bool, bool) -> bool;
 type AppTab = HashMap<(NodeId, NodeId), NodeId>;
 
-pub static FALSE : NodeId = NodeId(0);
-pub static TRUE : NodeId = NodeId(1);
+pub const FALSE : NodeId = NodeId(0);
+pub const TRUE : NodeId = NodeId(1);
 
 pub enum SatResult {
     Unsat,

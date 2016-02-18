@@ -369,9 +369,9 @@ impl AIG for VecAIG {
 
 pub type ParseResult<T> = Result<T, String>;
 
-pub static FALSE_LIT : Lit = Lit(0);
-pub static TRUE_LIT  : Lit = Lit(1);
-pub static MAX_VAR : Var = Var(!0 >> 1);
+pub const FALSE_LIT : Lit = Lit(0);
+pub const TRUE_LIT  : Lit = Lit(1);
+pub const MAX_VAR : Var = Var(!0 >> 1);
 #[inline(always)]
 pub fn lit_inverted (Lit(l): Lit) -> bool { l & 1 == 1 }
 #[inline(always)]
