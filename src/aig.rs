@@ -32,10 +32,10 @@ pub type CompactAnd = (DiffLit, DiffLit);
 pub struct Header {
     aigtype: AIGType,
     maxvar: Var,
-    ninputs: u64,
-    nlatches: u64,
-    noutputs: u64,
-    nands: u64
+    ninputs: usize,
+    nlatches: usize,
+    noutputs: usize,
+    nands: usize
 }
 
 pub struct AIGER<T: AIG> {
@@ -51,10 +51,10 @@ impl<A: AIG> AIGER<A> {
             header: Header {
                 aigtype: typ,
                 maxvar: aig.maxvar(),
-                ninputs: aig.num_inputs() as u64,
-                nlatches: aig.num_latches() as u64,
-                noutputs: aig.num_outputs() as u64,
-                nands: aig.num_ands() as u64
+                ninputs: aig.num_inputs(),
+                nlatches: aig.num_latches(),
+                noutputs: aig.num_outputs(),
+                nands: aig.num_ands()
             },
             body: aig,
             symbols: vec![],
@@ -104,7 +104,7 @@ pub struct MapAIG {
 /// TRUE and FALSE.
 pub struct VecAIG {
     /// The first `inputs` variables after 0 are inputs.
-    inputs: u64,
+    inputs: usize,
     /// The next `latches.len()` variables are latches, with these next
     /// literals.
     latches: Vec<Lit>,
@@ -269,7 +269,7 @@ impl<'a> IntoIterator for &'a VecAIG {
     fn into_iter(self) -> VecAndIter<'a> {
         VecAndIter {
             inner: self.ands.iter(),
-            idx: self.inputs + (self.latches.len() as u64) + 1
+            idx: (self.inputs + self.latches.len() + 1) as u64
         }
     }
 }
@@ -323,11 +323,11 @@ impl<A: AIG> AIG for AIGER<A> {
 }
 
 impl VecAIG {
-    pub fn new(ninputs: u64, nlatches: u64) -> VecAIG {
+    pub fn new(ninputs: usize, nlatches: usize) -> VecAIG {
         VecAIG {
             inputs: ninputs,
             // By default, the next value of all latches is FALSE.
-            latches: vec![Lit(0); nlatches as usize],
+            latches: vec![Lit(0); nlatches],
             outputs: Vec::new(),
             ands: Vec::new()
         }
@@ -356,14 +356,14 @@ impl AIG for VecAIG {
     fn num_outputs(&self) -> usize  { self.outputs.len() }
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxvar(&self)      -> Var    {
-        Var(self.inputs + (self.num_latches() + self.num_ands()) as u64)
+        Var((self.inputs + self.num_latches() + self.num_ands()) as u64)
     }
     fn inputs(&self)      -> Vec<Var> {
-        (1..self.inputs+1).map(|i| Var(i)).collect()
+        (1..self.inputs+1).map(|i| Var(i as u64)).collect()
     }
     fn latches(&self)     -> Vec<Var> {
         let mi = self.inputs + 1;
-        (mi..mi+self.latches.len() as u64).map(|i| Var(i)).collect()
+        (mi..mi+self.latches.len()).map(|i| Var(i as u64)).collect()
     }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
 }
@@ -461,10 +461,10 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     let h = Header {
         aigtype: ty,
         maxvar: Var(mv),
-        ninputs: ni,
-        nlatches: nl,
-        noutputs: no,
-        nands: na
+        ninputs: ni as usize,
+        nlatches: nl as usize,
+        noutputs: no as usize,
+        nands: na as usize
     };
     if h.maxvar > MAX_VAR {
         return Err("File has too many variables".to_string());
@@ -557,7 +557,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
                 let i = try!(parse_input(s.as_ref()));
                 is.push(i);
             },
-        Binary => for n in 0 .. ic { is.push(Var(n + 1)); }
+        Binary => for n in 0 .. ic { is.push(Var(n as u64 + 1)); }
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
@@ -565,7 +565,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
                 Binary => {
-                    let v0 = Var(n + ic + 1);
+                    let v0 = Var((n + ic + 1) as u64);
                     try!(parse_latch_binary(s.as_ref(), v0))
                 }
             };
@@ -586,7 +586,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         },
         Binary => {
             for n in 0 .. ac {
-                let v = Var(n + ic + lc + 1);
+                let v = Var((n + ic + lc + 1) as u64);
                 let (v2, a) = try!(parse_and_binary(v, r));
                 gs.insert(v2, a);
                 maxvar = cmp::max(maxvar, v2);
