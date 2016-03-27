@@ -90,7 +90,7 @@ impl<A: AIG> AIGER<A> {
 ///  variable defined in exactly one of `inputs`, `latches`, or `ands`.
 pub struct MapAIG {
     inputs: Vec<Var>,
-    latches: Vec<Latch>,
+    latches: BTreeMap<Var, Lit>,
     outputs: Vec<Lit>,
     // NB: this must be a BTreeMap to generate valid AIGER files without
     // an explicit sorting step.
@@ -172,7 +172,7 @@ impl MapAIG {
     pub fn new() -> MapAIG {
         MapAIG {
             inputs: Vec::new(),
-            latches: Vec::new(),
+            latches: BTreeMap::new(),
             outputs: Vec::new(),
             ands: BTreeMap::new(),
             maxvar: Var(0) // The variable associated with TRUE and FALSE.
@@ -224,7 +224,7 @@ impl AIG for MapAIG {
     fn num_ands(&self)    -> usize  { self.ands.len() }
     fn maxvar(&self)      -> Var    { self.maxvar }
     fn inputs(&self)      -> Vec<Var> { self.inputs.clone() }
-    fn latches(&self)     -> Vec<Var> { self.latches.iter().map(|&p| p.0).collect() }
+    fn latches(&self)     -> Vec<Var> { self.latches.keys().cloned().collect() }
     fn outputs(&self)     -> Vec<Lit> { self.outputs.clone() }
 }
 
@@ -238,7 +238,7 @@ impl DynamicAIG for MapAIG {
     fn add_latch(&mut self, n: Lit) -> Var {
         let v = next_var(self.maxvar);
         self.maxvar = v;
-        self.latches.push((v, n));
+        self.latches.insert(v, n);
         v
     }
 }
@@ -543,7 +543,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
     let mut is = Vec::with_capacity(h.ninputs as usize);
-    let mut ls = Vec::with_capacity(h.nlatches as usize);
+    let mut ls = BTreeMap::new();
     let mut os = Vec::with_capacity(h.noutputs as usize);
     let mut gs = BTreeMap::new();
     let ic = h.ninputs;
@@ -560,7 +560,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
-        let l =
+        let (v, n) =
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
                 Binary => {
@@ -568,7 +568,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
                     try!(parse_latch_binary(s.as_ref(), v0))
                 }
             };
-        ls.push(l);
+        ls.insert(v, n);
     }
     for _n in 0 .. h.noutputs {
         let s = try!(read_aiger_line(r));
@@ -703,8 +703,8 @@ pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
         Binary => ()
     }
     match g.header.aigtype {
-        ASCII  => for &l in &b.latches { try!(write_latch_ascii(l, w)); },
-        Binary => for &l in &b.latches { try!(write_latch_binary(l, w)); }
+        ASCII  => for (&v, &n) in &b.latches { try!(write_latch_ascii((v, n), w)); },
+        Binary => for (&v, &n) in &b.latches { try!(write_latch_binary((v, n), w)); }
     }
     for &o in &b.outputs {
         try!(write_output(o, w));
