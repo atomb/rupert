@@ -346,7 +346,8 @@ impl AIG for VecAIG {
         self.outputs.push(o);
     }
     fn get_and_inputs(&self, &Var(v): &Var) -> (Lit, Lit) {
-        let c = self.ands[v as usize];
+        let base = self.inputs as usize + self.latches.len();
+        let c = self.ands[v as usize - base];
         let (_, a) = expand_and(c, Var(v));
         a
     }
