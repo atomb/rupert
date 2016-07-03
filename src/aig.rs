@@ -387,6 +387,8 @@ pub fn lit_to_var (Lit(l): Lit) -> Var  { Var(l >> 1) }
 pub fn next_lit   (Lit(l): Lit) -> Lit  { Lit(l + 2)  }
 #[inline(always)]
 pub fn next_var   (Var(v): Var) -> Var  { Var(v + 1)  }
+#[inline(always)]
+pub fn var_to_int (Var(v): Var) -> isize { v as isize }
 
 fn compact_and((v, (Lit(l), Lit(r))): And) -> CompactAnd {
     let Lit(n) = var_to_lit(v);
