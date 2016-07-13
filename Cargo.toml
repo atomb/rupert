@@ -5,6 +5,7 @@ authors = ["Aaron Tomb <aarontomb@gmail.com>"]
 
 [dev-dependencies]
 quickcheck = "0.2"
+heapsize = "0.3"
 
 [profile.dev]
 opt-level = 0

@@ -821,8 +821,10 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
 
 #[cfg(test)]
 mod tests {
+    extern crate heapsize;
     extern crate quickcheck;
 
+    use self::heapsize::HeapSizeOf;
     use self::quickcheck::quickcheck;
     use self::quickcheck::Arbitrary;
     use self::quickcheck::Gen;
@@ -837,10 +839,45 @@ mod tests {
     use super::lit_to_var;
     use super::var_to_lit;
     use super::lit_strip;
+    use super::parse_aiger;
     use super::And;
     use super::DiffLit;
     use super::Lit;
     use super::Var;
+    use super::Header;
+    use super::AIGER;
+    use super::AIG;
+    use super::MapAIG;
+
+    impl HeapSizeOf for Header {
+        fn heap_size_of_children(&self) -> usize { 0 }
+    }
+
+    impl HeapSizeOf for Var {
+        fn heap_size_of_children(&self) -> usize { 0 }
+    }
+
+    impl HeapSizeOf for Lit {
+        fn heap_size_of_children(&self) -> usize { 0 }
+    }
+
+    impl HeapSizeOf for MapAIG {
+        fn heap_size_of_children(&self) -> usize {
+            self.inputs.heap_size_of_children() +
+                self.latches.heap_size_of_children() +
+                self.outputs.heap_size_of_children() +
+                self.ands.heap_size_of_children()
+        }
+    }
+
+    impl <A: HeapSizeOf + AIG> HeapSizeOf for AIGER<A> {
+        fn heap_size_of_children(&self) -> usize {
+            self.header.heap_size_of_children() +
+                self.body.heap_size_of_children() +
+                self.symbols.heap_size_of_children() +
+                self.comments.heap_size_of_children()
+        }
+    }
 
     impl Arbitrary for Lit {
         fn arbitrary<G: Gen>(g: &mut G) -> Lit { Lit(g.gen()) }
@@ -848,6 +885,26 @@ mod tests {
 
     impl Arbitrary for Var {
         fn arbitrary<G: Gen>(g: &mut G) -> Var { Var(g.gen()) }
+    }
+
+    fn check_map_aig_size (filename: &str) -> bool {
+        use std::fs::File;
+        use std::io::BufReader;
+        use std::path::Path;
+        use std::mem;
+        let ipath = Path::new(filename);
+        let fin = File::open(&ipath).ok().unwrap(); // Panic = failed test
+        let mut ib = BufReader::new(fin);
+        let r = parse_aiger(&mut ib);
+        match r {
+            Ok(aig) => {
+                println!("Entire AIG: {}", aig.heap_size_of_children() +
+                         mem::size_of::<MapAIG>());
+                println!("Ands: {}", aig.body.ands.heap_size_of_children());
+                true
+            }
+            Err(_) => false
+        }
     }
 
     fn prop_push_pop(delta: u32) -> bool {
@@ -908,5 +965,15 @@ mod tests {
     fn do_lits() {
         quickcheck(prop_var_lit as fn(Var) -> TestResult);
         quickcheck(prop_lit_var as fn(Lit) -> TestResult);
+    }
+
+    #[test]
+    fn test_map_aig_size() {
+        let aig_files = ["test-aig/JavaMD5.aig"];
+        for f in aig_files.iter() {
+            if !check_map_aig_size(f) {
+                panic!("AIG size check failed for ".to_string() + f);
+            }
+        }
     }
 }
