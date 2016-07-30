@@ -507,11 +507,11 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
     }
 }
 
-fn parse_latch_binary(s: &str, v: Var) -> ParseResult<Latch> {
+fn parse_latch_binary(s: &str) -> ParseResult<Lit> {
     let ref mut ws = s.split(' ');
     let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
     if ws.next().is_none() {
-        return Ok((v, n))
+        return Ok(n)
     } else {
         return Err("Stray words on binary latch line".to_string());
     }
@@ -563,15 +563,15 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     }
     for n in 0 .. lc {
         let s = try!(read_aiger_line(r));
-        let (v, n) =
+        let (v, nx) =
             match h.aigtype {
                 ASCII => try!(parse_latch_ascii(s.as_ref())),
                 Binary => {
-                    let v0 = Var((n + ic + 1) as u64);
-                    try!(parse_latch_binary(s.as_ref(), v0))
+                    let nx = try!(parse_latch_binary(s.as_ref()));
+                    (Var((n + ic + 1) as u64), nx)
                 }
             };
-        ls.insert(v, n);
+        ls.insert(v, nx);
     }
     for _n in 0 .. h.noutputs {
         let s = try!(read_aiger_line(r));
@@ -627,6 +627,73 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             latches: ls,
             ands: gs,
             maxvar: maxvar
+        };
+    let aiger =
+        AIGER {
+            header: h,
+            body: aig,
+            symbols: syms,
+            comments: cmnts
+        };
+    Ok(aiger)
+}
+
+pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
+    let l = try!(read_aiger_line(r));
+    let h = try!(parse_header(l.as_ref()));
+    let mut ls = Vec::with_capacity(h.nlatches as usize);
+    let mut os = Vec::with_capacity(h.noutputs as usize);
+    let mut gs = Vec::with_capacity(h.nands as usize);
+    match h.aigtype {
+        ASCII => return Err("ASCII format not supported by parse_aiger_vec.".to_string()),
+        Binary => ()
+    }
+    for _n in 0 .. h.nlatches {
+        let s = try!(read_aiger_line(r));
+        let nx = try!(parse_latch_binary(s.as_ref()));
+        ls.push(nx);
+    }
+    for _n in 0 .. h.noutputs {
+        let s = try!(read_aiger_line(r));
+        let i = try!(parse_output(s.as_ref()));
+        os.push(i);
+    }
+    for _n in 0 .. h.nands {
+        let a = try!(parse_cand_binary(r));
+        gs.push(a);
+    }
+    // TODO: share comment parsing code between two parsers
+    let mut in_comments = false;
+    let mut syms = Vec::new();
+    let mut cmnts = Vec::new();
+    while let Ok(s) = read_aiger_line(r) {
+        if s.is_empty() {
+            break
+        } else if in_comments {
+            cmnts.push(s.trim_right().to_string());
+        } else {
+            match s.chars().nth(0) {
+                Some('i') => syms.push(s.trim_right().to_string()),
+                Some('l') => syms.push(s.trim_right().to_string()),
+                Some('o') => syms.push(s.trim_right().to_string()),
+                Some('c') => in_comments = true,
+                Some(_) =>
+                    return Err("Invalid symbol table character".to_string()),
+                None =>
+                    // Should never happen
+                    return Err("Empty symbol table line".to_string()),
+            }
+        }
+    }
+    if r.bytes().count() != 0 {
+        return Err("Parsing did not consume all bytes".to_string());
+    }
+    let aig =
+        VecAIG {
+            inputs: h.ninputs,
+            latches: ls,
+            outputs: os,
+            ands: gs,
         };
     let aiger =
         AIGER {
@@ -830,6 +897,9 @@ mod tests {
     use self::quickcheck::Gen;
     use self::quickcheck::TestResult;
 
+    use std::io::Seek;
+    use std::io::SeekFrom;
+
     use super::MAX_VAR;
     use super::push_delta;
     use super::pop_delta;
@@ -840,6 +910,7 @@ mod tests {
     use super::var_to_lit;
     use super::lit_strip;
     use super::parse_aiger;
+    use super::parse_aiger_vec;
     use super::And;
     use super::DiffLit;
     use super::Lit;
@@ -848,6 +919,7 @@ mod tests {
     use super::AIGER;
     use super::AIG;
     use super::MapAIG;
+    use super::VecAIG;
 
     impl HeapSizeOf for Header {
         fn heap_size_of_children(&self) -> usize { 0 }
@@ -861,9 +933,21 @@ mod tests {
         fn heap_size_of_children(&self) -> usize { 0 }
     }
 
+    impl HeapSizeOf for DiffLit {
+        fn heap_size_of_children(&self) -> usize { 0 }
+    }
+
     impl HeapSizeOf for MapAIG {
         fn heap_size_of_children(&self) -> usize {
             self.inputs.heap_size_of_children() +
+                self.latches.heap_size_of_children() +
+                self.outputs.heap_size_of_children() +
+                self.ands.heap_size_of_children()
+        }
+    }
+
+    impl HeapSizeOf for VecAIG {
+        fn heap_size_of_children(&self) -> usize {
                 self.latches.heap_size_of_children() +
                 self.outputs.heap_size_of_children() +
                 self.ands.heap_size_of_children()
@@ -887,7 +971,7 @@ mod tests {
         fn arbitrary<G: Gen>(g: &mut G) -> Var { Var(g.gen()) }
     }
 
-    fn check_map_aig_size (filename: &str) -> bool {
+    fn check_aig_size (filename: &str) -> bool {
         use std::fs::File;
         use std::io::BufReader;
         use std::path::Path;
@@ -895,15 +979,21 @@ mod tests {
         let ipath = Path::new(filename);
         let fin = File::open(&ipath).ok().unwrap(); // Panic = failed test
         let mut ib = BufReader::new(fin);
-        let r = parse_aiger(&mut ib);
-        match r {
-            Ok(aig) => {
-                println!("Entire AIG: {}", aig.heap_size_of_children() +
+        let mr = parse_aiger(&mut ib);
+        ib.seek(SeekFrom::Start(0));
+        let vr = parse_aiger_vec(&mut ib);
+        match (mr, vr) {
+            (Ok(maig), Ok(vaig)) => {
+                println!("Entire MapAIG: {}", maig.heap_size_of_children() +
                          mem::size_of::<MapAIG>());
-                println!("Ands: {}", aig.body.ands.heap_size_of_children());
+                println!("MapAIG Ands: {}", maig.body.ands.heap_size_of_children());
+                println!("Entire VecAIG: {}", vaig.heap_size_of_children() +
+                         mem::size_of::<VecAIG>());
+                println!("VecAIG Ands: {}", vaig.body.ands.heap_size_of_children());
                 true
             }
-            Err(_) => false
+            (Err(_), _) => false,
+            (_, Err(_)) => false
         }
     }
 
@@ -971,7 +1061,7 @@ mod tests {
     fn test_map_aig_size() {
         let aig_files = ["test-aig/JavaMD5.aig"];
         for f in aig_files.iter() {
-            if !check_map_aig_size(f) {
+            if !check_aig_size(f) {
                 panic!("AIG size check failed for ".to_string() + f);
             }
         }
