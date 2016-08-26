@@ -12,6 +12,7 @@ use std::ops::Not;
 use std::result::Result;
 use std::slice;
 
+/// A marker to distinguish between ASCII and binary AIGER files.
 pub enum AIGType { ASCII, Binary }
 use aig::AIGType::*;
 
@@ -34,6 +35,7 @@ pub type Latch = (Var, Lit);
 pub type And = (Var, (Lit, Lit));
 pub type CompactAnd = (DiffLit, DiffLit);
 
+/// The information required in the header of an AIGER file.
 pub struct Header {
     aigtype: AIGType,
     maxvar: Var,
@@ -43,6 +45,8 @@ pub struct Header {
     nands: usize
 }
 
+/// An `AIGER` represents the external form of an `AIG`. This includes a
+/// body along with a header, symbols, and comments.
 pub struct AIGER<T: AIG> {
     header: Header,
     body: T,
@@ -416,8 +420,13 @@ impl AIG for VecAIG {
 
 pub type ParseResult<T> = Result<T, String>;
 
+/// A literal representing the always-true value.
 pub const FALSE_LIT : Lit = Lit(0);
+
+/// A literal representing the always-false value.
 pub const TRUE_LIT  : Lit = Lit(1);
+
+/// The maximum possible variable representable by this library.
 pub const MAX_VAR : Var = Var(!0 >> 1);
 
 /// Return true if the given literal represents a negated variable.
