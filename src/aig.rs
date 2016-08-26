@@ -476,12 +476,12 @@ fn parse_u64(s: &str) -> ParseResult<u64> {
 fn parse_u64_error(os: Option<&str>, msg: &str) -> ParseResult<u64> {
     let s = try!(os.ok_or(msg.to_string()));
     let l = try!(parse_u64(s));
-    return Ok(l)
+    Ok(l)
 }
 
 fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
     let l = try!(parse_u64_error(os, msg));
-    return Ok(Lit(l))
+    Ok(Lit(l))
 }
 
 fn parse_header(l: &str) -> ParseResult<Header> {
@@ -509,17 +509,17 @@ fn parse_header(l: &str) -> ParseResult<Header> {
     if h.maxvar > MAX_VAR {
         return Err("File has too many variables".to_string());
     }
-    return Ok(h)
+    Ok(h)
 }
 
 fn parse_input(s: &str) -> ParseResult<Var> {
     let i = try!(parse_u64(s));
-    return Ok(lit_to_var(Lit(i)))
+    Ok(lit_to_var(Lit(i)))
 }
 
 fn parse_output(s: &str) -> ParseResult<Lit> {
     let i = try!(parse_u64(s));
-    return Ok(Lit(i))
+    Ok(Lit(i))
 }
 
 fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
@@ -911,7 +911,7 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     for l in aig.outputs() {
         outs.push(eval_lit(&vals, l));
     }
-    return outs
+    outs
 }
 
 /// Copy an AIG in AIGER format from a reader to a writer, preserving
