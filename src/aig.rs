@@ -135,36 +135,72 @@ pub trait AIG {
     /// returns a literal for symmetry with the other logical
     /// operations.
     fn add_and(&mut self, l: Lit, r: Lit) -> Lit;
-    /// l | r == ~(~l & ~r)
+
+    /// Add an OR gate with the given literals as inputs. This function
+    /// builds on conjunction and negation through the identity `l | r
+    /// == ~(~l & ~r)`.
     fn add_or(&mut self, l: Lit, r: Lit) -> Lit {
         lit_not(self.add_and(lit_not(l), lit_not(r)))
     }
-    /// l ^ r == (l & ~r) | (~l & r)
+
+    /// Add an XOR gate with the given literals as inputs. This function
+    /// builds on conjunction, disjunction, and negation through the
+    /// identity `l ^ r == (l & ~r) | (~l & r)`.
     fn add_xor(&mut self, l: Lit, r: Lit) -> Lit {
         let l1 = self.add_and(l, lit_not(r));
         let r1 = self.add_and(lit_not(l), r);
         self.add_or(l1, r1)
     }
+
+    /// Set the given literal as an output.
     fn add_output(&mut self, o: Lit);
+
+    /// Retrieve the literals that feed into the gate defining the given
+    /// variable.
     fn get_and_inputs(&self, v: &Var) -> (Lit, Lit);
+
     /*
     fn get_latch_next(&self, l: Var) -> Lit;
     */
+
+    /// Return a vector of the variables representing the inputs of this
+    /// circuit (not including latches).
     fn inputs(&self) -> Vec<Var>;
+
+    /// Return a vector of the variables representing the latches of this
+    /// circuit.
     fn latches(&self) -> Vec<Var>;
+
+    /// Return a vector of the literals that are the outputs of this
+    /// circuit.
     fn outputs(&self) -> Vec<Lit>;
+
+    /// Return the number of inputs that this circuit has (not including
+    /// latches).
     fn num_inputs(&self) -> usize;
+
+    /// Return the number of latches that this circuit has.
     fn num_latches(&self) -> usize;
+
+    /// Return the number of outputs that this circuit has.
     fn num_outputs(&self) -> usize;
+
+    /// Return the number of gates that this circuit has.
     fn num_ands(&self) -> usize;
+
+    /// Return the largest variable defined in this circuit.
     fn maxvar(&self) -> Var;
-    //fn eval(&self, ...) -> ...;
 }
 
 /// AIG structures dynamic enough to allow inputs and latches to be
 /// added after initial construction.
 pub trait DynamicAIG {
+    /// Create a new input and return the variable that represents it.
     fn add_input(&mut self) -> Var;
+
+    /// Create a new latch, with the given literal as its value for the
+    /// next clock cycle, returning a variable representing the value of
+    /// the latch in the current clock cycle.
     fn add_latch(&mut self, n: Lit) -> Var;
 }
 
@@ -175,7 +211,9 @@ impl MapAIG {
             latches: BTreeMap::new(),
             outputs: Vec::new(),
             ands: BTreeMap::new(),
-            maxvar: Var(0) // The variable associated with TRUE and FALSE.
+            // The variable associated with TRUE and FALSE is always
+            // present.
+            maxvar: Var(0)
         }
     }
 }
@@ -540,8 +578,6 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
 /// Parse an AIGER file, in either ASCII or binary format. This
 /// constructs a MapAIG because the ASCII AIGER file format technically
 /// allows weird orderings, which MapAIG supports but VecAIG does not.
-/// An alternative implementation that worked only on binary AIGER files
-/// and generated a VecAIG would make sense.
 pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
@@ -638,6 +674,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     Ok(aiger)
 }
 
+/// Parse an AIGER file, in binary format, constructing a VecAIG.
 pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
     let l = try!(read_aiger_line(r));
     let h = try!(parse_header(l.as_ref()));
@@ -705,13 +742,15 @@ pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
     Ok(aiger)
 }
 
-/// Check the one globally valid property of an AIG: that for every
-/// gate, the node being defined is greater than its left child, and its
-/// left child is greater than or equal to its right child.
+/// Check the one globally valid property of an AIG: that every gate is
+/// valid according to the valid_and function.
 pub fn valid_aig<A: IntoIterator<Item=And>>(aig: A) -> bool {
     aig.into_iter().all(valid_and)
 }
 
+/// Check the one globally valid property of a gate in an AIG: that the
+/// node being defined is greater than its left child, and its left
+/// child is greater than or equal to its right child.
 pub fn valid_and((v, (l, r)): And) -> bool {
     var_to_lit(v) > l && l >= r
 }
@@ -763,7 +802,7 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
     push_delta(rd, w)
 }
 
-/// Write an AIG to a file in AIGER format. The choice of ASCII or
+/// Write a MapAIG to a file in AIGER format. The choice of ASCII or
 /// binary format is taken from the AIGER header.
 pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     try!(write_header(&(g.header), w));
