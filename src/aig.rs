@@ -575,6 +575,33 @@ fn read_aiger_line<R: BufRead>(r: &mut R) -> ParseResult<String> {
     }
 }
 
+fn parse_symbols_and_comments<R: BufRead>(r: &mut R) ->
+        ParseResult<(Vec<String>, Vec<String>)> {
+    let mut in_comments = false;
+    let mut syms = Vec::new();
+    let mut cmnts = Vec::new();
+    while let Ok(s) = read_aiger_line(r) {
+        if s.is_empty() {
+            break
+        } else if in_comments {
+            cmnts.push(s.trim_right().to_string());
+        } else {
+            match s.chars().nth(0) {
+                Some('i') => syms.push(s.trim_right().to_string()),
+                Some('l') => syms.push(s.trim_right().to_string()),
+                Some('o') => syms.push(s.trim_right().to_string()),
+                Some('c') => in_comments = true,
+                Some(_) =>
+                    return Err("Invalid symbol table character".to_string()),
+                None =>
+                    // Should never happen
+                    return Err("Empty symbol table line".to_string()),
+            }
+        }
+    }
+    Ok((syms, cmnts))
+}
+
 /// Parse an AIGER file, in either ASCII or binary format. This
 /// constructs a MapAIG because the ASCII AIGER file format technically
 /// allows weird orderings, which MapAIG supports but VecAIG does not.
@@ -631,28 +658,7 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
             }
         }
     };
-    let mut in_comments = false;
-    let mut syms = Vec::new();
-    let mut cmnts = Vec::new();
-    while let Ok(s) = read_aiger_line(r) {
-        if s.is_empty() {
-            break
-        } else if in_comments {
-            cmnts.push(s.trim_right().to_string());
-        } else {
-            match s.chars().nth(0) {
-                Some('i') => syms.push(s.trim_right().to_string()),
-                Some('l') => syms.push(s.trim_right().to_string()),
-                Some('o') => syms.push(s.trim_right().to_string()),
-                Some('c') => in_comments = true,
-                Some(_) =>
-                    return Err("Invalid symbol table character".to_string()),
-                None =>
-                    // Should never happen
-                    return Err("Empty symbol table line".to_string()),
-            }
-        }
-    }
+    let (syms, cmnts) = try!(parse_symbols_and_comments(r));
     if r.bytes().count() != 0 {
         return Err("Parsing did not consume all bytes".to_string());
     }
@@ -699,29 +705,7 @@ pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
         let a = try!(parse_cand_binary(r));
         gs.push(a);
     }
-    // TODO: share comment parsing code between two parsers
-    let mut in_comments = false;
-    let mut syms = Vec::new();
-    let mut cmnts = Vec::new();
-    while let Ok(s) = read_aiger_line(r) {
-        if s.is_empty() {
-            break
-        } else if in_comments {
-            cmnts.push(s.trim_right().to_string());
-        } else {
-            match s.chars().nth(0) {
-                Some('i') => syms.push(s.trim_right().to_string()),
-                Some('l') => syms.push(s.trim_right().to_string()),
-                Some('o') => syms.push(s.trim_right().to_string()),
-                Some('c') => in_comments = true,
-                Some(_) =>
-                    return Err("Invalid symbol table character".to_string()),
-                None =>
-                    // Should never happen
-                    return Err("Empty symbol table line".to_string()),
-            }
-        }
-    }
+    let (syms, cmnts) = try!(parse_symbols_and_comments(r));
     if r.bytes().count() != 0 {
         return Err("Parsing did not consume all bytes".to_string());
     }
