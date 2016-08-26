@@ -15,13 +15,18 @@ use std::slice;
 pub enum AIGType { ASCII, Binary }
 use aig::AIGType::*;
 
+/// A variable is the basic notion in an AIG. Constants, inputs and
+/// latches form the initial set of variables, and every gate defines an
+/// additional variable.
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Var(u64);
 
+/// A literal is a positive or negative reference to a variable.
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Lit(u64);
 
-/// Note: this assumes we never have more than 32 bits of difference!
+/// A literal represented as an offset from some previous literal. Note:
+/// this assumes we never have more than 32 bits of difference!
 #[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DiffLit(u32);
 
@@ -105,11 +110,14 @@ pub struct MapAIG {
 pub struct VecAIG {
     /// The first `inputs` variables after 0 are inputs.
     inputs: usize,
+
     /// The next `latches.len()` variables are latches, with these next
     /// literals.
     latches: Vec<Lit>,
+
     /// The literals in this vector are outputs.
     outputs: Vec<Lit>,
+
     /// Each literal in this vector refers to either inputs/latches or
     /// the outputs of other gates. The entry at index `i` of this
     /// vector corresponds to the definition of variable `i +
@@ -411,23 +419,42 @@ pub type ParseResult<T> = Result<T, String>;
 pub const FALSE_LIT : Lit = Lit(0);
 pub const TRUE_LIT  : Lit = Lit(1);
 pub const MAX_VAR : Var = Var(!0 >> 1);
+
+/// Return true if the given literal represents a negated variable.
 #[inline(always)]
 pub fn lit_inverted (Lit(l): Lit) -> bool { l & 1 == 1 }
+
+/// Strip the negation bit from a literal making it unconditionally
+/// positive.
 #[inline(always)]
 pub fn lit_strip  (Lit(l): Lit) -> Lit  { Lit(l & (!1)) }
+
+/// Negate a literal.
 #[inline(always)]
 pub fn lit_not    (Lit(l): Lit) -> Lit  { Lit(l ^ 1) }
+
+/// Translate a variable to a positive literal.
 #[inline(always)]
 pub fn var_to_lit (Var(v): Var) -> Lit  { Lit(v << 1) }
+
+/// Return the variable that a literal refers to.
 #[inline(always)]
 pub fn lit_to_var (Lit(l): Lit) -> Var  { Var(l >> 1) }
+
+/// Return a version of the given literal that refers to the next larger
+/// variable.
 #[inline(always)]
 pub fn next_lit   (Lit(l): Lit) -> Lit  { Lit(l + 2)  }
+
+/// Return the next variable larger than the given one.
 #[inline(always)]
 pub fn next_var   (Var(v): Var) -> Var  { Var(v + 1)  }
+
+/// Convert a variable to an integer. For "friend" use only.
 #[inline(always)]
 pub fn var_to_int (Var(v): Var) -> isize { v as isize }
 
+/// Translate a normal gate into a compact gate.
 fn compact_and((v, (Lit(l), Lit(r))): And) -> CompactAnd {
     let Lit(n) = var_to_lit(v);
     assert!(n - l <= 0xFFFFFFFF);
@@ -435,11 +462,13 @@ fn compact_and((v, (Lit(l), Lit(r))): And) -> CompactAnd {
     (DiffLit((n - l) as u32), DiffLit((l - r) as u32))
 }
 
+/// Transform a compact gate into a normal gate.
 fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, v: Var) -> And {
     let Lit(n) = var_to_lit(v);
     (v, (Lit(n - ld as u64), Lit(n - (ld + rd) as u64)))
 }
 
+/// Add the binary AIGER encoding of a delta to the given writer.
 fn push_delta<W: Write>(DiffLit(delta): DiffLit, w: &mut W) -> io::Result<()> {
     let mut tmp = delta;
     while (tmp & !0x7f) != 0 {
@@ -449,6 +478,7 @@ fn push_delta<W: Write>(DiffLit(delta): DiffLit, w: &mut W) -> io::Result<()> {
     w.write_all(&[tmp as u8])
 }
 
+/// Retrieve the next binary AIGER delta encoded in the given reader.
 fn pop_delta<R: Read>(r: &mut R) -> ParseResult<DiffLit> {
     let mut x : u32 = 0;
     let mut i : u8  = 0;
@@ -856,6 +886,10 @@ pub fn drop_hash<A: AIG>(aig: HashedAIG<A>) -> A {
 
 // TODO: implement Zero once it's stable
 // NB: this is only reasonable for types for which clone() is a no-op
+/// A `LitValue` is a value for something like a `Lit`. This is used to
+/// allow parallel evaluation. A `bool` can represent the value of a
+/// `Lit` in one possible world, whereas a larger word can represent
+/// multiple possible worlds simultaneously.
 pub trait LitValue : Not<Output=Self> + BitAnd<Output=Self> + Copy {
     fn zero() -> Self;
 }
