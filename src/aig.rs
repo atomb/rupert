@@ -926,6 +926,16 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R,
     }
 }
 
+/// Copy an AIG in binary AIGER format from a reader to a writer.
+pub fn copy_aiger_vec<R: BufRead, W: Write>(r: &mut R,
+                                            w: &mut W) -> ParseResult<()> {
+    let aiger = try!(parse_aiger_vec(r));
+    match write_aiger_vec(&aiger, w) {
+        Ok(()) => Ok(()),
+        Err(e) => Err("I/O error: ".to_string() + e.description())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate heapsize;
