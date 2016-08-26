@@ -770,7 +770,7 @@ fn write_latch_ascii<W: Write>((v, Lit(n)): Latch, w: &mut W) -> io::Result<()> 
     writeln!(w, "{} {}", l, n)
 }
 
-fn write_latch_binary<W: Write>((_, Lit(n)): Latch, w: &mut W) -> io::Result<()> {
+fn write_latch_binary<W: Write>(Lit(n): Lit, w: &mut W) -> io::Result<()> {
     writeln!(w, "{}", n)
 }
 
@@ -782,6 +782,10 @@ fn write_and_ascii<W: Write>(a: And, w: &mut W) -> io::Result<()> {
 
 fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
     let (ld, rd) = compact_and(a);
+    write_compact_and_binary((ld, rd), w)
+}
+
+fn write_compact_and_binary<W: Write>((ld, rd): CompactAnd, w: &mut W) -> io::Result<()> {
     try!(push_delta(ld, w));
     push_delta(rd, w)
 }
@@ -797,7 +801,7 @@ pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     }
     match g.header.aigtype {
         ASCII  => for (&v, &n) in &b.latches { try!(write_latch_ascii((v, n), w)); },
-        Binary => for (&v, &n) in &b.latches { try!(write_latch_binary((v, n), w)); }
+        Binary => for (_, &n) in &b.latches { try!(write_latch_binary(n, w)); }
     }
     for &o in &b.outputs {
         try!(write_output(o, w));
@@ -815,7 +819,20 @@ pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
     for s in &g.symbols      { try!(writeln!(w, "{}", s)) }
     if  g.comments.len() > 0 { try!(writeln!(w, "c"))     }
     for s in &g.comments     { try!(writeln!(w, "{}", s)) }
-    return Ok(())
+    Ok(())
+}
+
+/// Write a VecAIG to a file in binary AIGER format.
+pub fn write_aiger_vec<W: Write>(g: &AIGER<VecAIG>, w: &mut W) -> io::Result<()> {
+    try!(write_header(&(g.header), w));
+    let ref b = g.body;
+    for &n in &b.latches     { try!(write_latch_binary(n, w)); }
+    for &o in &b.outputs     { try!(write_output(o, w)); }
+    for &a in &b.ands        { try!(write_compact_and_binary(a, w)); }
+    for s in &g.symbols      { try!(writeln!(w, "{}", s)) }
+    if  g.comments.len() > 0 { try!(writeln!(w, "c"))     }
+    for s in &g.comments     { try!(writeln!(w, "{}", s)) }
+    Ok(())
 }
 
 /// Add a hash table to a MapAIG, consuming the original value in the
