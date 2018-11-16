@@ -14,7 +14,7 @@ fn bdd_sat_to_cnf_sat(m: &HashMap<bdd::Var, bool>) -> Vec<isize> {
         let i = if b { sv } else { -sv };
         res.push(i);
     }
-    res.sort_by(|a,b| a.abs().cmp(&b.abs()));
+    res.sort_by(|a, b| a.abs().cmp(&b.abs()));
     res
 }
 
@@ -24,13 +24,12 @@ pub fn bddsat(f: &Formula) -> SatResult {
     for c in &f.clauses {
         let mut clf = bdd::FALSE;
         for &l in &c.lits {
-            let ln =
-                if l > 0 {
-                    bdd.var(Var(l as usize - 1))
-                } else {
-                    let n = bdd.var(Var((-l) as usize - 1));
-                    bdd.not(n)
-                };
+            let ln = if l > 0 {
+                bdd.var(Var(l as usize - 1))
+            } else {
+                let n = bdd.var(Var((-l) as usize - 1));
+                bdd.not(n)
+            };
             clf = bdd.or(ln, clf)
         }
         top = bdd.and(clf, top);
@@ -39,7 +38,7 @@ pub fn bddsat(f: &Formula) -> SatResult {
     match r {
         bdd::SatResult::Unsat => Unsat,
         bdd::SatResult::Sat(m) => Sat(bdd_sat_to_cnf_sat(&m)),
-        bdd::SatResult::Error => panic!("SAT check error")
+        bdd::SatResult::Error => panic!("SAT check error"),
     }
 }
 

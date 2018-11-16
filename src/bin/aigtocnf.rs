@@ -35,7 +35,7 @@ fn catch_err<T>(r: io::Result<T>, msg: &String) -> T {
 */
 
 pub fn main() {
-    let vargs : Vec<String> = std::env::args().collect();
+    let vargs: Vec<String> = std::env::args().collect();
     if vargs.len() != 3 {
         println!("Usage: aigtocnf <infile> <outfile>");
         return;

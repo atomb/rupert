@@ -1,14 +1,14 @@
 // TODO: Would using SmallIntMap be better than using Vec here?
 pub struct EquivClass {
-    ranks : Vec<usize>,
-    parents : Vec<usize>
+    ranks: Vec<usize>,
+    parents: Vec<usize>,
 }
 
 impl EquivClass {
-    pub fn new(n : usize) -> EquivClass {
+    pub fn new(n: usize) -> EquivClass {
         EquivClass {
             ranks: vec![0; n],
-            parents: (0..n).map(|i| { i }).collect()
+            parents: (0..n).map(|i| i).collect(),
         }
     }
 
@@ -16,7 +16,7 @@ impl EquivClass {
         let xroot = self.find(x);
         let yroot = self.find(y);
         if xroot == yroot {
-            return
+            return;
         }
         let xrank = self.ranks[xroot];
         let yrank = self.ranks[yroot];
@@ -51,8 +51,8 @@ mod tests {
     #[test]
     fn test_one_class() {
         let mut ec = EquivClass::new(4);
-        ec.union(1,2);
-        ec.union(2,3);
+        ec.union(1, 2);
+        ec.union(2, 3);
         assert_eq!(ec.find(1), ec.find(2));
         assert_eq!(ec.find(1), ec.find(3));
         assert_eq!(ec.find(2), ec.find(3));

@@ -8,7 +8,7 @@ use std::io::BufWriter;
 use std::path::Path;
 
 pub fn main() {
-    let vargs : Vec<String> = std::env::args().collect();
+    let vargs: Vec<String> = std::env::args().collect();
     if vargs.len() != 3 {
         println!("Usage: copy_aiger <infile> <outfile>");
         return;
@@ -22,6 +22,6 @@ pub fn main() {
     let r = aig::copy_aiger(&mut ib, &mut ob);
     match r {
         Ok(()) => println!("Success."),
-        Err(e) => println!("Error: {}", e)
+        Err(e) => println!("Error: {}", e),
     }
 }

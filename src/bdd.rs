@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 
-#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Var(pub usize);
 
-#[derive (Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeId(usize);
 
 pub type Node = (Var, NodeId, NodeId);
 pub struct ROBDD {
     tab: Vec<Node>,
-    hash: HashMap<Node, NodeId>
+    hash: HashMap<Node, NodeId>,
 }
 
 pub type Op = Fn(bool, bool) -> bool;
 type AppTab = HashMap<(NodeId, NodeId), NodeId>;
 
-pub const FALSE : NodeId = NodeId(0);
-pub const TRUE : NodeId = NodeId(1);
+pub const FALSE: NodeId = NodeId(0);
+pub const TRUE: NodeId = NodeId(1);
 
 pub enum SatResult {
     Unsat,
-    Sat(HashMap<Var,bool>),
-    Error
+    Sat(HashMap<Var, bool>),
+    Error,
 }
 
 use std::fmt;
@@ -57,7 +57,10 @@ pub fn show_table<W: Write>(t: &Vec<Node>, w: &mut W) -> io::Result<()> {
 impl ROBDD {
     pub fn new(nvars: usize) -> ROBDD {
         let t = vec![(Var(nvars), TRUE, FALSE), (Var(nvars), FALSE, TRUE)];
-        ROBDD { tab: t, hash: HashMap::new() }
+        ROBDD {
+            tab: t,
+            hash: HashMap::new(),
+        }
     }
 
     pub fn mk(&mut self, v: Var, l: NodeId, h: NodeId) -> NodeId {
@@ -104,7 +107,9 @@ impl ROBDD {
             let l = self.app(g, op, l1, u2);
             let h = self.app(g, op, h1, u2);
             u = self.mk(v1, l, h);
-        } else /* v1 > v2 */ {
+        } else
+        /* v1 > v2 */
+        {
             let l = self.app(g, op, u1, l2);
             let h = self.app(g, op, u1, h2);
             u = self.mk(v2, l, h);
@@ -174,10 +179,10 @@ impl ROBDD {
 mod tests {
     #[test]
     pub fn sat_test() {
+        use super::Var;
+        use super::FALSE;
         use super::ROBDD;
         use super::TRUE;
-        use super::FALSE;
-        use super::Var;
 
         let mut bdd = ROBDD::new(4);
         let xv = Var(0);
@@ -204,7 +209,7 @@ mod tests {
                 assert_eq!(m.get(&zv), Some(&true));
                 assert_eq!(m.get(&wv), Some(&false));
             }
-            _ => assert!(false)
+            _ => assert!(false),
         }
     }
 }

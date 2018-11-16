@@ -12,7 +12,7 @@ pub fn main() {
         process::exit(1);
     }
     for name in env::args().skip(1) {
-        let mut contents : Vec<u8> = Vec::new();
+        let mut contents: Vec<u8> = Vec::new();
         println!("Processing {}", name);
         match dpll::read_file(&name, &mut contents) {
             Err(e) => println!("Error reading file {}: {}", name, e),
@@ -20,7 +20,7 @@ pub fn main() {
                 let s = str::from_utf8(contents.as_ref()).ok().unwrap();
                 match cnf::parse_dimacs_formula(s) {
                     None => println!("Failed to parse formula in {}.", name),
-                    Some(f) => dpll::do_dpll(&f)
+                    Some(f) => dpll::do_dpll(&f),
                 }
             }
         }

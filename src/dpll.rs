@@ -20,8 +20,8 @@ fn unit_clauses(f: &Formula) -> BTreeSet<isize> {
 }
 
 fn pure_literals(f: &Formula) -> Vec<isize> {
-    let mut vsum : Vec<isize> = vec![0; f.maxvar + 1];
-    let mut vcount : Vec<isize> = vec![0; f.maxvar + 1];
+    let mut vsum: Vec<isize> = vec![0; f.maxvar + 1];
+    let mut vcount: Vec<isize> = vec![0; f.maxvar + 1];
     for c in &f.clauses {
         for l in &c.lits {
             let v = l.abs() as usize;
@@ -30,13 +30,13 @@ fn pure_literals(f: &Formula) -> Vec<isize> {
         }
     }
     let mut res = Vec::with_capacity(f.maxvar);
-    for v in 1 .. f.maxvar + 1 {
+    for v in 1..f.maxvar + 1 {
         let sum = vsum[v];
         if sum.abs() == vcount[v] && sum != 0 {
             res.push(v as isize * sum.signum());
         }
     }
-    return res
+    return res;
 }
 
 fn assign(f: &Formula, l: isize) -> Formula {
@@ -44,14 +44,13 @@ fn assign(f: &Formula, l: isize) -> Formula {
     for c in &f.clauses {
         if c.lits.binary_search(&l).is_err() {
             let lneg = -l;
-            let lsnew =
-                c.lits.iter().cloned().filter(|ll| *ll != lneg).collect();
-            newcs.push(Clause { lits : lsnew });
+            let lsnew = c.lits.iter().cloned().filter(|ll| *ll != lneg).collect();
+            newcs.push(Clause { lits: lsnew });
         }
     }
     Formula {
         clauses: newcs,
-        maxvar: f.maxvar
+        maxvar: f.maxvar,
     }
 }
 
@@ -68,19 +67,27 @@ fn choose_literal(f: &Formula) -> isize {
             lit = c.lits[0];
         }
     }
-    return lit
+    return lit;
 }
 
 pub fn dpll(f0: &Formula, assgn0: &Vec<isize>) -> SatResult {
     let mut assgn = assgn0.clone();
-    if f0.clauses.iter().any(|c| { c.is_empty() }) { return Unsat };
+    if f0.clauses.iter().any(|c| c.is_empty()) {
+        return Unsat;
+    };
     if f0.clauses.len() == 0 {
-        assgn.sort_by(|a,b| a.abs().cmp(&b.abs()));
+        assgn.sort_by(|a, b| a.abs().cmp(&b.abs()));
         Sat(assgn)
     } else {
         let mut f = f0.clone();
-        for l in &unit_clauses(&f)  { f = assign(&f, *l); assgn.push(*l); };
-        for l in &pure_literals(&f) { f = assign(&f, *l); assgn.push(*l); };
+        for l in &unit_clauses(&f) {
+            f = assign(&f, *l);
+            assgn.push(*l);
+        }
+        for l in &pure_literals(&f) {
+            f = assign(&f, *l);
+            assgn.push(*l);
+        }
         let l = choose_literal(&f);
         if l == 0 {
             // Couldn't find a literal to assign, so one further call
@@ -96,16 +103,16 @@ pub fn dpll(f0: &Formula, assgn0: &Vec<isize>) -> SatResult {
                     let mut a2 = assgn.clone();
                     a2.push(-l);
                     dpll(&f2, &a2)
-                },
-                r => r
+                }
+                r => r,
             }
         }
     }
 }
 
 pub fn read_file(file: &String, buf: &mut Vec<u8>) -> io::Result<usize> {
-    use std::path;
     use std::fs;
+    use std::path;
     let path = &path::Path::new(file);
     let mut fh = fs::File::open(path).ok().unwrap();
     fh.read_to_end(buf)
