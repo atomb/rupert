@@ -21,11 +21,14 @@ use aig::AIGType::*;
 
 /// A variable is the basic notion in an AIG. Constants, inputs and
 /// latches form the initial set of variables, and every gate defines an
-/// additional variable.
+/// additional variable. The most significant bit should never be set, or
+/// else it won't be usable in a `Lit`.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Var(u64);
 
-/// A literal is a positive or negative reference to a variable.
+/// A literal is a positive or negative reference to a variable. The least
+/// significant bit indicates its polarity. The remaining bits name the
+/// associated variable.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Lit(u64);
 
@@ -199,7 +202,8 @@ pub trait AIG {
     /// Return the number of latches that this circuit has.
     fn num_latches(&self) -> usize;
 
-    /// Return the number of outputs that this circuit has.
+    /// Return the number of outputs that this circuit has (not including
+    /// latches).
     fn num_outputs(&self) -> usize;
 
     /// Return the number of gates that this circuit has.
@@ -991,7 +995,6 @@ pub fn drop_hash<A: AIG>(aig: HashedAIG<A>) -> A {
     aig.aig
 }
 
-// TODO: implement Zero once it's stable
 // NB: this is only reasonable for types for which clone() is a no-op
 /// A `LitValue` is a value for something like a `Lit`. This is used to
 /// allow parallel evaluation. A `bool` can represent the value of a
@@ -1283,4 +1286,32 @@ mod tests {
             }
         }
     }
+
+    /*
+    fn add_rhs_implicit<A: IntoIterator<Item=And>>(aig: A) -> u64 {
+        let mut tot = 0;
+        for (_, (Lit(r0), Lit(r1))) in aig.into_iter() {
+            tot = tot + r0 + r1;
+        }
+        tot
+    }
+
+    fn add_rhs_explicit<A: AIG>(aig: A) -> u64 {
+
+        let mut tot = 0;
+        for n in 0..aig.num_ands() {
+            let (Lit(r0), Lit(r1)) = aig.get_and_inputs(&Var(n as u64));
+            tot = tot + r0 + r1;
+        }
+        tot
+    }
+
+    #[bench]
+    fn bench_map_and_iter_implicit(b: &mut Bencher) {
+    }
+
+    #[bench]
+    fn bench_map_and_iter_explicit(b: &mut Bencher) {
+    }
+    */
 }
