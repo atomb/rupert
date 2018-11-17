@@ -238,7 +238,7 @@ impl MapAIG {
     }
 }
 
-/// An iterator over the gates in a `MapAIG`.
+/// An over the gates in a `MapAIG`.
 pub struct MapAndIter<'a> {
     inner: btree_map::Iter<'a, Var, (Lit, Lit)>,
 }
@@ -489,10 +489,10 @@ impl AIG for VecAIG {
 
 pub type ParseResult<T> = Result<T, String>;
 
-/// A literal representing the always-true value.
+/// A literal representing the always-false value.
 pub const FALSE_LIT: Lit = Lit(0);
 
-/// A literal representing the always-false value.
+/// A literal representing the always-true value.
 pub const TRUE_LIT: Lit = Lit(1);
 
 /// The maximum possible variable representable by this library.
