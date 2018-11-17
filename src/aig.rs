@@ -1,7 +1,6 @@
 use std::cmp;
 use std::collections::btree_map;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::io::BufRead;
@@ -142,7 +141,7 @@ pub struct VecAIG {
 /// necessary.
 pub struct HashedAIG<T: AIG> {
     aig: T,
-    hash: HashMap<(Lit, Lit), Var>,
+    hash: BTreeMap<(Lit, Lit), Var>,
 }
 
 type CompactHashedAIG = HashedAIG<VecAIG>;
@@ -979,7 +978,7 @@ pub fn write_aiger_vec<W: Write>(g: &AIGER<VecAIG>, w: &mut W) -> io::Result<()>
 /// Add a hash table to a MapAIG, consuming the original value in the
 /// process.
 pub fn hash_aig(aig: MapAIG) -> HashedAIG<MapAIG> {
-    let mut table = HashMap::new();
+    let mut table = BTreeMap::new();
     for (n, (l, r)) in &aig {
         table.insert((l, r), n);
     }
