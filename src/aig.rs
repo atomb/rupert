@@ -1027,43 +1027,37 @@ fn eval_lit<T: LitValue>(vals: &Vec<T>, l: Lit) -> T {
     }
 }
 
-/// Evaluate an AIG on a given vector of input values. Generic over
-/// input type. For `bool`, this will do standard evaluation. For larger
-/// types, it will evaluate multiple possible inputs at once. For
-/// instance, for a vector of `u64` values, it will yield a vector of
-/// `u64` outputs, corresponding to the outputs for each set of bits in
-/// the inputs.
+#[inline(always)]
+fn set_var<T: LitValue>(vals: &mut Vec<T>, v: Var, lv: T) {
+    vals[v.0 as usize] = lv;
+}
+
+/// Evaluate an AIG on a given vector of input values. Generic over input type.
+/// For `bool`, this will do standard evaluation. For larger types, it will
+/// evaluate multiple possible inputs at once. For instance, for a vector of
+/// `u64` values, it will yield a vector of `u64` outputs, corresponding to the
+/// outputs for each set of bits in the inputs.
 ///
-/// Invariants: all variables must be in order of constants followed by
-/// inputs followed by latches followed by gates, and the number of
-/// values in `ins` must match the number of inputs in the AIG. TODO:
-/// compare performance of this implementation to one based on a map
-/// instead of a vector. If the map is similarly fast, it will depend on
-/// fewer invariants.
+/// Invariants: all variables (inputs, latches, and gates) must have indicies
+/// smaller than the sum of the counts of all three.
 pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
-    let ni = aig.num_inputs();
-    assert!(ni == ins.len());
-    let nl = aig.num_latches();
-    let no = aig.num_outputs();
-    let na = aig.num_ands();
-    //let mut vals = vec![LitValue::zero(); ni + nl + na + 1];
-    let mut vals = Vec::with_capacity(ni + nl + na + 1);
-    vals.push(LitValue::zero());
-    for &v in ins {
-        vals.push(v);
+    let mut vals = vec![LitValue::zero();
+                        aig.num_inputs() +
+                        aig.num_latches() +
+                        aig.num_ands()];
+    set_var(&mut vals, lit_to_var(FALSE_LIT), LitValue::zero());
+    for (&i, &v) in aig.inputs().iter().zip(ins) {
+        set_var(&mut vals, i, v)
     }
-    for _i in 0..nl {
-        vals.push(LitValue::zero());
+    for l in aig.latches() {
+        set_var(&mut vals, l, LitValue::zero());
     }
-    let mut n = ni + nl + 1;
     for (v, (r0, r1)) in aig {
-        assert!(v == Var(n as u64));
         let r0v = eval_lit(&vals, r0);
         let r1v = eval_lit(&vals, r1);
-        vals.push(r0v & r1v);
-        n = n + 1;
+        set_var(&mut vals, v, r0v & r1v);
     }
-    let mut outs = Vec::with_capacity(no);
+    let mut outs = Vec::with_capacity(aig.num_outputs());
     for l in aig.outputs() {
         outs.push(eval_lit(&vals, l));
     }
