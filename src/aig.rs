@@ -1070,6 +1070,20 @@ pub fn eval_aig<T: LitValue>(aig: &MapAIG, ins: &Vec<T>) -> Vec<T> {
     outs
 }
 
+/// Return a literal that will be true if any of the pairs of literals in the
+/// given vector are not equal. This constructs what is known as a "miter" in
+/// many hardware-oriented tools and allows comparison of two circuits. If the
+/// resulting literal can never be true (the circuit that influences it is
+/// unsatisfiable) then the two circuits are equal.
+pub fn diff_lits<A: AIG>(aig: &mut A, lits: Vec<(Lit, Lit)>) -> Lit {
+    let mut result = TRUE_LIT;
+    for (l1, l2) in lits {
+        let l = aig.add_xor(l1, l2);
+        result = aig.add_or(result, l);
+    }
+    result
+}
+
 /// Copy an AIG in AIGER format from a reader to a writer, preserving
 /// the type.
 pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R, w: &mut W) -> ParseResult<()> {
