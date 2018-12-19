@@ -31,9 +31,9 @@ impl fmt::Display for SatResult {
             &SatResult::Unsat => write!(f, "unsat"),
             &SatResult::Error => write!(f, "error"),
             &SatResult::Sat(ref m) => {
-                try!(write!(f, "sat"));
+                write!(f, "sat")?;
                 for (&Var(v), b) in m {
-                    try!(write!(f, " {}:{}", v, b));
+                    write!(f, " {}:{}", v, b)?;
                 }
                 Ok(())
             }
@@ -44,11 +44,11 @@ impl fmt::Display for SatResult {
 use std::io;
 use std::io::Write;
 pub fn show_table<W: Write>(t: &Vec<Node>, w: &mut W) -> io::Result<()> {
-    try!(writeln!(w, " Node    Var    Low   High"));
-    try!(writeln!(w, "_____  _____  _____  _____"));
+    writeln!(w, " Node    Var    Low   High")?;
+    writeln!(w, "_____  _____  _____  _____")?;
     let mut i = 0;
     for &(Var(v), NodeId(l), NodeId(h)) in t {
-        try!(writeln!(w, "{:>5}  {:>5}  {:>5}  {:>5}", i, v, l, h));
+        writeln!(w, "{:>5}  {:>5}  {:>5}  {:>5}", i, v, l, h)?;
         i = i + 1;
     }
     Ok(())

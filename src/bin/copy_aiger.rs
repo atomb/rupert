@@ -1,5 +1,3 @@
-extern crate rupert;
-
 use rupert::aig;
 
 use std::fs::File;

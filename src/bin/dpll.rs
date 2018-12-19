@@ -1,5 +1,3 @@
-extern crate rupert;
-
 use rupert::cnf;
 use rupert::dpll;
 use std::env;

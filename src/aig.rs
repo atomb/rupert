@@ -16,7 +16,7 @@ pub enum AIGType {
     ASCII,
     Binary,
 }
-use aig::AIGType::*;
+use self::AIGType::*;
 
 /// A variable is the basic notion in an AIG. Constants, inputs and
 /// latches form the initial set of variables, and every gate defines an
@@ -567,7 +567,7 @@ fn expand_and((DiffLit(ld), DiffLit(rd)): CompactAnd, v: Var) -> And {
 fn push_delta<W: Write>(DiffLit(delta): DiffLit, w: &mut W) -> io::Result<()> {
     let mut tmp = delta;
     while (tmp & !0x7f) != 0 {
-        try!(w.write_all(&[((tmp & 0x7f) | 0x80) as u8]));
+        w.write_all(&[((tmp & 0x7f) | 0x80) as u8])?;
         tmp = tmp >> 7;
     }
     w.write_all(&[tmp as u8])
@@ -600,13 +600,13 @@ fn parse_u64(s: &str) -> ParseResult<u64> {
 }
 
 fn parse_u64_error(os: Option<&str>, msg: &str) -> ParseResult<u64> {
-    let s = try!(os.ok_or(msg.to_string()));
-    let l = try!(parse_u64(s));
+    let s = os.ok_or(msg.to_string())?;
+    let l = parse_u64(s)?;
     Ok(l)
 }
 
 fn parse_lit_error(os: Option<&str>, msg: &str) -> ParseResult<Lit> {
-    let l = try!(parse_u64_error(os, msg));
+    let l = parse_u64_error(os, msg)?;
     Ok(Lit(l))
 }
 
@@ -618,11 +618,11 @@ fn parse_header(l: &str) -> ParseResult<Header> {
         Some(fmt) => return Err("Invalid format identifier: ".to_string() + fmt),
         None => return Err("Missing format identifier.".to_string()),
     };
-    let mv = try!(parse_u64_error(ws.next(), "Missing maxvar in header"));
-    let ni = try!(parse_u64_error(ws.next(), "Missing input count in header"));
-    let nl = try!(parse_u64_error(ws.next(), "Missing latch count in header"));
-    let no = try!(parse_u64_error(ws.next(), "Missing output count in header"));
-    let na = try!(parse_u64_error(ws.next(), "Missing gate count in header"));
+    let mv = parse_u64_error(ws.next(), "Missing maxvar in header")?;
+    let ni = parse_u64_error(ws.next(), "Missing input count in header")?;
+    let nl = parse_u64_error(ws.next(), "Missing latch count in header")?;
+    let no = parse_u64_error(ws.next(), "Missing output count in header")?;
+    let na = parse_u64_error(ws.next(), "Missing gate count in header")?;
     let h = Header {
         aigtype: ty,
         maxvar: Var(mv),
@@ -638,19 +638,19 @@ fn parse_header(l: &str) -> ParseResult<Header> {
 }
 
 fn parse_input(s: &str) -> ParseResult<Var> {
-    let i = try!(parse_u64(s));
+    let i = parse_u64(s)?;
     Ok(lit_to_var(Lit(i)))
 }
 
 fn parse_output(s: &str) -> ParseResult<Lit> {
-    let i = try!(parse_u64(s));
+    let i = parse_u64(s)?;
     Ok(Lit(i))
 }
 
 fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
     let ref mut ws = l.split(' ');
-    let l = try!(parse_lit_error(ws.next(), "Missing latch ID"));
-    let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
+    let l = parse_lit_error(ws.next(), "Missing latch ID")?;
+    let n = parse_lit_error(ws.next(), "Missing latch next")?;
     if ws.next().is_none() {
         return Ok((lit_to_var(l), n));
     } else {
@@ -660,9 +660,9 @@ fn parse_latch_ascii(l: &str) -> ParseResult<Latch> {
 
 fn parse_and_ascii(l: &str) -> ParseResult<And> {
     let ref mut ws = l.split(' ');
-    let n = try!(parse_lit_error(ws.next(), "Missing AND ID"));
-    let l = try!(parse_lit_error(ws.next(), "Missing AND left"));
-    let r = try!(parse_lit_error(ws.next(), "Missing AND right"));
+    let n = parse_lit_error(ws.next(), "Missing AND ID")?;
+    let l = parse_lit_error(ws.next(), "Missing AND left")?;
+    let r = parse_lit_error(ws.next(), "Missing AND right")?;
     if ws.next().is_none() {
         return Ok((lit_to_var(n), (l, r)));
     } else {
@@ -672,7 +672,7 @@ fn parse_and_ascii(l: &str) -> ParseResult<And> {
 
 fn parse_latch_binary(s: &str) -> ParseResult<Lit> {
     let ref mut ws = s.split(' ');
-    let n = try!(parse_lit_error(ws.next(), "Missing latch next"));
+    let n = parse_lit_error(ws.next(), "Missing latch next")?;
     if ws.next().is_none() {
         return Ok(n);
     } else {
@@ -681,13 +681,13 @@ fn parse_latch_binary(s: &str) -> ParseResult<Lit> {
 }
 
 fn parse_cand_binary<R: Read>(r: &mut R) -> ParseResult<CompactAnd> {
-    let ld = try!(pop_delta(r));
-    let rd = try!(pop_delta(r));
+    let ld = pop_delta(r)?;
+    let rd = pop_delta(r)?;
     Ok((ld, rd))
 }
 
 fn parse_and_binary<R: Read>(v: Var, r: &mut R) -> ParseResult<And> {
-    let a = try!(parse_cand_binary(r));
+    let a = parse_cand_binary(r)?;
     Ok(expand_and(a, v))
 }
 
@@ -715,9 +715,8 @@ fn parse_symbols_and_comments<R: BufRead>(r: &mut R) -> ParseResult<(Vec<String>
                 Some('o') => syms.push(s.trim_right().to_string()),
                 Some('c') => in_comments = true,
                 Some(_) => return Err("Invalid symbol table character".to_string()),
-                None =>
+                None => {
                 // Should never happen
-                {
                     return Err("Empty symbol table line".to_string())
                 }
             }
@@ -730,8 +729,8 @@ fn parse_symbols_and_comments<R: BufRead>(r: &mut R) -> ParseResult<(Vec<String>
 /// constructs a MapAIG because the ASCII AIGER file format technically
 /// allows weird orderings, which MapAIG supports but VecAIG does not.
 pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
-    let l = try!(read_aiger_line(r));
-    let h = try!(parse_header(l.as_ref()));
+    let l = read_aiger_line(r)?;
+    let h = parse_header(l.as_ref())?;
     let mut is = Vec::with_capacity(h.ninputs as usize);
     let mut ls = BTreeMap::new();
     let mut os = Vec::with_capacity(h.noutputs as usize);
@@ -741,8 +740,8 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
     let ac = h.nands;
     match h.aigtype {
         ASCII => for _n in 0..ic {
-            let s = try!(read_aiger_line(r));
-            let i = try!(parse_input(s.as_ref()));
+            let s = read_aiger_line(r)?;
+            let i = parse_input(s.as_ref())?;
             is.push(i);
         },
         Binary => for n in 0..ic {
@@ -750,39 +749,39 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
         },
     }
     for n in 0..lc {
-        let s = try!(read_aiger_line(r));
+        let s = read_aiger_line(r)?;
         let (v, nx) = match h.aigtype {
-            ASCII => try!(parse_latch_ascii(s.as_ref())),
+            ASCII => parse_latch_ascii(s.as_ref())?,
             Binary => {
-                let nx = try!(parse_latch_binary(s.as_ref()));
+                let nx = parse_latch_binary(s.as_ref())?;
                 (Var((n + ic + 1) as u64), nx)
             }
         };
         ls.insert(v, nx);
     }
     for _n in 0..h.noutputs {
-        let s = try!(read_aiger_line(r));
-        let i = try!(parse_output(s.as_ref()));
+        let s = read_aiger_line(r)?;
+        let i = parse_output(s.as_ref())?;
         os.push(i);
     }
     let mut maxvar = Var(0);
     match h.aigtype {
         ASCII => for _n in 0..ac {
-            let s = try!(read_aiger_line(r));
-            let (v, a) = try!(parse_and_ascii(s.as_ref()));
+            let s = read_aiger_line(r)?;
+            let (v, a) = parse_and_ascii(s.as_ref())?;
             gs.insert(v, a);
             maxvar = cmp::max(maxvar, v);
         },
         Binary => {
             for n in 0..ac {
                 let v = Var((n + ic + lc + 1) as u64);
-                let (v2, a) = try!(parse_and_binary(v, r));
+                let (v2, a) = parse_and_binary(v, r)?;
                 gs.insert(v2, a);
                 maxvar = cmp::max(maxvar, v2);
             }
         }
     };
-    let (syms, cmnts) = try!(parse_symbols_and_comments(r));
+    let (syms, cmnts) = parse_symbols_and_comments(r)?;
     if r.bytes().count() != 0 {
         return Err("Parsing did not consume all bytes".to_string());
     }
@@ -804,8 +803,8 @@ pub fn parse_aiger<R: BufRead>(r: &mut R) -> ParseResult<AIGER<MapAIG>> {
 
 /// Parse an AIGER file, in binary format, constructing a VecAIG.
 pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
-    let l = try!(read_aiger_line(r));
-    let h = try!(parse_header(l.as_ref()));
+    let l = read_aiger_line(r)?;
+    let h = parse_header(l.as_ref())?;
     let mut ls = Vec::with_capacity(h.nlatches as usize);
     let mut os = Vec::with_capacity(h.noutputs as usize);
     let mut gs = Vec::with_capacity(h.nands as usize);
@@ -814,20 +813,20 @@ pub fn parse_aiger_vec<R: BufRead>(r: &mut R) -> ParseResult<AIGER<VecAIG>> {
         Binary => (),
     }
     for _n in 0..h.nlatches {
-        let s = try!(read_aiger_line(r));
-        let nx = try!(parse_latch_binary(s.as_ref()));
+        let s = read_aiger_line(r)?;
+        let nx = parse_latch_binary(s.as_ref())?;
         ls.push(nx);
     }
     for _n in 0..h.noutputs {
-        let s = try!(read_aiger_line(r));
-        let i = try!(parse_output(s.as_ref()));
+        let s = read_aiger_line(r)?;
+        let i = parse_output(s.as_ref())?;
         os.push(i);
     }
     for _n in 0..h.nands {
-        let a = try!(parse_cand_binary(r));
+        let a = parse_cand_binary(r)?;
         gs.push(a);
     }
-    let (syms, cmnts) = try!(parse_symbols_and_comments(r));
+    let (syms, cmnts) = parse_symbols_and_comments(r)?;
     if r.bytes().count() != 0 {
         return Err("Parsing did not consume all bytes".to_string());
     }
@@ -902,75 +901,75 @@ fn write_and_binary<W: Write>(a: And, w: &mut W) -> io::Result<()> {
 }
 
 fn write_compact_and_binary<W: Write>((ld, rd): CompactAnd, w: &mut W) -> io::Result<()> {
-    try!(push_delta(ld, w));
+    push_delta(ld, w)?;
     push_delta(rd, w)
 }
 
 /// Write a MapAIG to a file in AIGER format. The choice of ASCII or
 /// binary format is taken from the AIGER header.
 pub fn write_aiger<W: Write>(g: &AIGER<MapAIG>, w: &mut W) -> io::Result<()> {
-    try!(write_header(&(g.header), w));
+    write_header(&(g.header), w)?;
     let ref b = g.body;
     match g.header.aigtype {
         ASCII => for &i in &b.inputs {
-            try!(write_input(i, w));
+            write_input(i, w)?;
         },
         Binary => (),
     }
     match g.header.aigtype {
         ASCII => for (&v, &n) in &b.latches {
-            try!(write_latch_ascii((v, n), w));
+            write_latch_ascii((v, n), w)?;
         },
         Binary => for (_, &n) in &b.latches {
-            try!(write_latch_binary(n, w));
+            write_latch_binary(n, w)?;
         },
     }
     for &o in &b.outputs {
-        try!(write_output(o, w));
+        write_output(o, w)?;
     }
     // NB: the following would need to include an explicit sorting step
     // in order to use HashMap instead of BTreeMap.
     match g.header.aigtype {
         ASCII => for (&n, &(l, r)) in &b.ands {
-            try!(write_and_ascii((n, (l, r)), w));
+            write_and_ascii((n, (l, r)), w)?;
         },
         Binary => for (&n, &(l, r)) in &b.ands {
-            try!(write_and_binary((n, (l, r)), w));
+            write_and_binary((n, (l, r)), w)?;
         },
     }
     for s in &g.symbols {
-        try!(writeln!(w, "{}", s))
+        writeln!(w, "{}", s)?
     }
     if g.comments.len() > 0 {
-        try!(writeln!(w, "c"))
+        writeln!(w, "c")?
     }
     for s in &g.comments {
-        try!(writeln!(w, "{}", s))
+        writeln!(w, "{}", s)?
     }
     Ok(())
 }
 
 /// Write a VecAIG to a file in binary AIGER format.
 pub fn write_aiger_vec<W: Write>(g: &AIGER<VecAIG>, w: &mut W) -> io::Result<()> {
-    try!(write_header(&(g.header), w));
+    write_header(&(g.header), w)?;
     let ref b = g.body;
     for &n in &b.latches {
-        try!(write_latch_binary(n, w));
+        write_latch_binary(n, w)?;
     }
     for &o in &b.outputs {
-        try!(write_output(o, w));
+        write_output(o, w)?;
     }
     for &a in &b.ands {
-        try!(write_compact_and_binary(a, w));
+        write_compact_and_binary(a, w)?;
     }
     for s in &g.symbols {
-        try!(writeln!(w, "{}", s))
+        writeln!(w, "{}", s)?
     }
     if g.comments.len() > 0 {
-        try!(writeln!(w, "c"))
+        writeln!(w, "c")?
     }
     for s in &g.comments {
-        try!(writeln!(w, "{}", s))
+        writeln!(w, "{}", s)?
     }
     Ok(())
 }
@@ -1081,7 +1080,7 @@ pub fn diff_lits<A: AIG>(aig: &mut A, lits: Vec<(Lit, Lit)>) -> Lit {
 /// Copy an AIG in AIGER format from a reader to a writer, preserving
 /// the type.
 pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R, w: &mut W) -> ParseResult<()> {
-    let aiger = try!(parse_aiger(r));
+    let aiger = parse_aiger(r)?;
     match write_aiger(&aiger, w) {
         Ok(()) => Ok(()),
         Err(e) => Err("I/O error: ".to_string() + e.description()),
@@ -1090,7 +1089,7 @@ pub fn copy_aiger<R: BufRead, W: Write>(r: &mut R, w: &mut W) -> ParseResult<()>
 
 /// Copy an AIG in binary AIGER format from a reader to a writer.
 pub fn copy_aiger_vec<R: BufRead, W: Write>(r: &mut R, w: &mut W) -> ParseResult<()> {
-    let aiger = try!(parse_aiger_vec(r));
+    let aiger = parse_aiger_vec(r)?;
     match write_aiger_vec(&aiger, w) {
         Ok(()) => Ok(()),
         Err(e) => Err("I/O error: ".to_string() + e.description()),

@@ -1,5 +1,3 @@
-extern crate rupert;
-
 use rupert::bddsat;
 use rupert::cnf;
 use rupert::dpll;

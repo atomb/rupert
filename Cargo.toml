@@ -2,6 +2,7 @@
 name = "rupert"
 version = "0.0.1"
 authors = ["Aaron Tomb <aarontomb@gmail.com>"]
+edition = "2018"
 
 [dev-dependencies]
 quickcheck = "0.6.2"

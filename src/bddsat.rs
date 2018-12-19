@@ -1,11 +1,12 @@
-use bdd;
-use bdd::Var;
-use cnf;
-use cnf::Formula;
-use cnf::SatResult;
-use cnf::SatResult::*;
 use std::collections::HashMap;
 use std::io;
+
+use crate::bdd;
+use crate::bdd::Var;
+use crate::cnf;
+use crate::cnf::Formula;
+use crate::cnf::SatResult;
+use crate::cnf::SatResult::*;
 
 fn bdd_sat_to_cnf_sat(m: &HashMap<bdd::Var, bool>) -> Vec<isize> {
     let mut res = Vec::new();

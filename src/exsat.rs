@@ -1,7 +1,7 @@
-use cnf;
-use cnf::Formula;
-use cnf::SatResult;
-use cnf::SatResult::*;
+use crate::cnf;
+use crate::cnf::Formula;
+use crate::cnf::SatResult;
+use crate::cnf::SatResult::*;
 
 pub fn exhaust_sat(f: &Formula) -> SatResult {
     let mut current = vec![false; f.maxvar];

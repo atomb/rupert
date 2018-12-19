@@ -115,16 +115,16 @@ pub fn parse_dimacs_formula(s: &str) -> Option<Formula> {
 
 pub fn write_dimacs_clause<W: Write>(c: &Clause, w: &mut W) -> io::Result<()> {
     for l in &c.lits {
-        try!(write!(w, "{} ", l))
+        write!(w, "{} ", l)?
     }
     write!(w, "{}", '0')
 }
 
 pub fn write_dimacs_formula<W: Write>(f: &Formula, w: &mut W) -> io::Result<()> {
-    try!(writeln!(w, "p cnf {} {}", f.maxvar, f.clauses.len()));
+    writeln!(w, "p cnf {} {}", f.maxvar, f.clauses.len())?;
     for c in &f.clauses {
-        try!(write_dimacs_clause(c, w));
-        try!(write!(w, "{}", '\n'));
+        write_dimacs_clause(c, w)?;
+        write!(w, "{}", '\n')?;
     }
     return Ok(());
 }
@@ -133,12 +133,12 @@ pub fn write_sat_result<W: Write>(r: &SatResult, w: &mut W) -> io::Result<()> {
     match r {
         &SatResult::Unsat => writeln!(w, "{}", "s UNSATISFIABLE"),
         &SatResult::Sat(ref ls) => {
-            try!(writeln!(w, "{}", "s SATISFIABLE"));
-            try!(write!(w, "{}", 'v'));
+            writeln!(w, "{}", "s SATISFIABLE")?;
+            write!(w, "{}", 'v')?;
             for l in ls {
-                try!(write!(w, " {}", l));
+                write!(w, " {}", l)?;
             }
-            try!(writeln!(w, "{}", " 0"));
+            writeln!(w, "{}", " 0")?;
             return Ok(());
         }
     }
@@ -150,7 +150,7 @@ pub fn write_sat_valid<W: Write>(f: &Formula, r: &SatResult, w: &mut W) -> io::R
         &SatResult::Sat(ref ls) => {
             let good = eval_formula_on_result(f, ls);
             if !good {
-                try!(writeln!(w, "{}", "**BAD RESULT**"));
+                writeln!(w, "{}", "**BAD RESULT**")?;
             }
             return Ok(());
         }

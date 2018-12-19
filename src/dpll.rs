@@ -1,11 +1,12 @@
-use cnf;
-use cnf::Clause;
-use cnf::Formula;
-use cnf::SatResult;
-use cnf::SatResult::*;
 use std::collections::BTreeSet;
 use std::io;
 use std::io::Read;
+
+use crate::cnf;
+use crate::cnf::Clause;
+use crate::cnf::Formula;
+use crate::cnf::SatResult;
+use crate::cnf::SatResult::*;
 
 fn is_unit_clause(c: &Clause) -> Option<isize> {
     if c.lits.len() != 1 {
