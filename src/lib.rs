@@ -1,4 +1,5 @@
 pub mod aig;
+pub mod aigsat;
 pub mod aigtocnf;
 pub mod bdd;
 pub mod bddsat;
