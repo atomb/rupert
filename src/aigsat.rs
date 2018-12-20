@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::io;
-use std::io::Write;
 
 use batsat::BasicSolver;
 use batsat::callbacks;
@@ -14,6 +12,13 @@ use crate::aig::MapAIG;
 use crate::aig::AIG;
 
 type VarMap = HashMap<aig::Var, clause::Var>;
+
+#[derive(Debug)]
+pub enum Result {
+    Sat(Vec<aig::Lit>),
+    Unsat,
+    Unknown
+}
 
 fn var_to_var(v: aig::Var, solver: &mut BasicSolver, map: &mut VarMap) -> clause::Var {
     match map.get(&v) {
@@ -34,9 +39,7 @@ fn lit_to_lit(l: aig::Lit, solver: &mut BasicSolver, map: &mut VarMap) -> clause
     clause::Lit::new(var_to_var(aig::lit_to_var(l), solver, map), !aig::lit_inverted(l))
 }
 
-pub fn aig_sat(aig: &MapAIG) {
-    let nvars = aig::var_to_int(aig.maxvar()) + 1;
-    let nclauses = 3 * aig.num_ands() + aig.num_outputs() + 1;
+pub fn aig_sat(aig: &MapAIG) -> Result {
     let mut solver = BasicSolver::new(SolverOpts::default(), callbacks::Basic::new());
     let mut lits : Vec<clause::Lit> = vec![];
     let mut varmap : VarMap = HashMap::new();
@@ -72,23 +75,41 @@ pub fn aig_sat(aig: &MapAIG) {
         solver.add_clause_reuse(&mut lits);
     }
 
-    // The constant node is false.
+    // The TRUE node is true.
     let ltrue = lit_to_lit(aig::TRUE_LIT, &mut solver, &mut varmap);
     lits.clear();
     lits.push(ltrue);
     solver.add_clause_reuse(&mut lits);
 
+    let mut revmap = HashMap::new();
+    for (av, bv) in &varmap {
+        revmap.insert(bv.idx(), av);
+    }
+
     if !solver.simplify() {
-        println!("s UNSATISFIABLE");
+        return Result::Unsat;
     }
     let ret = solver.solve_limited(&[]);
 
     if ret == lbool::TRUE {
-        println!("s SATISFIABLE");
-        println!("{}", solver.dimacs_model());
+        let mut model = vec![];
+        for (i, &val) in solver.get_model().iter().enumerate() {
+            match revmap.get(&(i as u32)) {
+                Some(v) => {
+                    let l = aig::var_to_lit(**v);
+                    if val == lbool::TRUE {
+                        model.push(l)
+                    } else if val == lbool::FALSE {
+                        model.push(!l)
+                    }
+                }
+                None => panic!("Variable not found."),
+            }
+        }
+        return Result::Sat(model);
     } else if ret == lbool::FALSE {
-        println!("s UNSATISFIABLE");
+        return Result::Unsat;
     } else {
-        println!("s INDETERMINATE");
+        return Result::Unknown;
     }
 }

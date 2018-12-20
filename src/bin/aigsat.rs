@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::BufReader;
-use std::io::BufWriter;
 use std::path::Path;
 
 use rupert::aig;
@@ -21,5 +20,6 @@ pub fn main() {
     let infile = &vargs[1];
     let parse_msg = format!("Parsing AIGER file {}", infile);
     let aig = aig::parse_aiger(&mut file_reader(infile)).expect(&parse_msg);
-    aigsat::aig_sat(&aig.get_body());
+    let res = aigsat::aig_sat(&aig.get_body());
+    println!("{:?}", res);
 }
