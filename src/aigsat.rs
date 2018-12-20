@@ -78,6 +78,9 @@ pub fn aig_sat(aig: &MapAIG) {
     lits.push(ltrue);
     solver.add_clause_reuse(&mut lits);
 
+    if !solver.simplify() {
+        println!("s UNSATISFIABLE");
+    }
     let ret = solver.solve_limited(&[]);
 
     if ret == lbool::TRUE {
