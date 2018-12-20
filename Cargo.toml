@@ -22,5 +22,5 @@ debug-assertions = true
 opt-level = 3
 debug = false
 rpath = false
-lto = false
+lto = true
 debug-assertions = false
