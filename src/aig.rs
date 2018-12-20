@@ -517,6 +517,13 @@ pub fn lit_not(Lit(l): Lit) -> Lit {
     Lit(l ^ 1)
 }
 
+impl Not for Lit {
+    type Output = Lit;
+    fn not(self) -> Lit {
+        lit_not(self)
+    }
+}
+
 /// Translate a variable to a positive literal.
 #[inline(always)]
 pub fn var_to_lit(Var(v): Var) -> Lit {
